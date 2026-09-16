@@ -1,0 +1,25 @@
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Firebase
+app/google-services.json
+app/debug.keystore
+app/release.keystore
+*.jks
+*.keystore
+
+# Secrets
+secrets.properties
+*.p12
+*.pem
+
+# Kotlin
+/.kotlin/

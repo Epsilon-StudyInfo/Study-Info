@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// PrepVault Firebase Storage Security Rules
+// -----------------------------------------
+// All user-owned image binaries live under users/{uid}/questions/{questionId}/{imageId}
+// and can only be read/written/deleted by the owning user.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{uid}/{allPaths=**} {
+      allow read: if request.auth.uid == uid;
+      allow write: if request.auth.uid == uid
+                   && request.resource.size < 5 * 1024 * 1024 // max 5MB per image
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth.uid == uid;
+    }
+
+    // Deny everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

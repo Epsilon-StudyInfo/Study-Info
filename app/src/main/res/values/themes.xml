@@ -1,0 +1,13 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base theme - lightweight, used until Compose takes over -->
+    <style name="Theme.PrepVault" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Splash theme (used as launcher theme) -->
+    <style name="Theme.PrepVault.Splash" parent="Theme.PrepVault">
+        <item name="android:windowBackground">@color/brand_seed</item>
+    </style>
+</resources>

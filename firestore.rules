@@ -1,0 +1,64 @@
+rules_version = '2';
+
+// PrepVault Firestore Security Rules
+// ------------------------------------
+// Every user's data lives under users/{uid}/... and is only accessible to that user.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Top-level user document: only the owner can read/write it.
+    match /users/{uid} {
+      allow read: if request.auth.uid == uid;
+      allow write: if request.auth.uid == uid;
+
+      // All per-user subcollections. Same ownership rule.
+      match /{subcollection}/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+
+      // Per-user subcollection-level rules (in case Firestore treats them separately)
+      match /errors/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      match /unsolved/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      match /tasks/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      match /reviews/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      match /progress/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      match /tags/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      match /customSources/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      match /chapters/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      match /topics/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      match /settings/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      match /streak/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      match /questionImages/{docId} {
+        allow read, write: if request.auth.uid == uid;
+      }
+    }
+
+    // No other top-level collections are used by the app — deny everything else.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
