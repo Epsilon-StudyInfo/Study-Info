@@ -12,7 +12,20 @@
           "package_name": "com.studyinfo.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "942091255409-kl39s15dvued5efu4vaoj3qoa5hlctqu.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.studyinfo.app",
+            "certificate_hash": "d61a907cc90021a55f1da749f371cc978f2e20bb"
+          }
+        },
+        {
+          "client_id": "942091255409-95j94umuf9dvd3c9cou8o9uju6od2c75.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBREiDYB_Vg8CT3fvdKQwEVYak_SvQODpA"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "942091255409-95j94umuf9dvd3c9cou8o9uju6od2c75.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

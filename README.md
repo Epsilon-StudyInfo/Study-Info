@@ -132,6 +132,8 @@ The repo already contains a real `app/google-services.json` (Firebase client ide
 
 #### Enabling “Continue with Google” (one-time, per Firebase project)
 
+> ✅ **Already done for this project** — the committed `app/google-services.json` contains the OAuth client entries, and the SHA-1 of the shared debug keystore is registered in Firebase. Google Sign-In works out of the box in CI/debug builds. The steps below are only needed if you switch to a different Firebase project.
+
 Google Sign-In only works after the **SHA-1 fingerprint** of the APK's signing key is registered in Firebase:
 
 1. **Debug builds (CI + local)** are all signed with the shared keystore committed at `keystores/prepvault-debug.keystore` (password `android`). Its fingerprints are:

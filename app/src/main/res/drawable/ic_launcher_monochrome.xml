@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!--
+      Monochrome (themed icon) layer: line-art version of the PrepVault mark.
+      The launcher tints everything a single colour, so the design is expressed
+      through strokes and solid fills only, all at full opacity.
+    -->
+
+    <!-- Shield outline -->
+    <path
+        android:pathData="M54,31 C58.5,33.2 63.5,34.8 69,35.6 L69,53 C69,64.8 62.5,74.6 54,80.8 C45.5,74.6 39,64.8 39,53 L39,35.6 C44.5,34.8 49.5,33.2 54,31 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3.5"
+        android:strokeLineJoin="round" />
+
+    <!-- Open book (solid) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,47.5 C50.8,44.4 45.8,42.8 41.5,43.6 C41,43.7 40.6,44.1 40.6,44.6 L40.6,62.4 C40.6,63 41.1,63.4 41.7,63.3 C45.8,62.7 50.6,64.2 54,67.4 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,47.5 C57.2,44.4 62.2,42.8 66.5,43.6 C67,43.7 67.4,44.1 67.4,44.6 L67.4,62.4 C67.4,63 66.9,63.4 66.3,63.3 C62.2,62.7 57.4,64.2 54,67.4 Z" />
+
+    <!-- Badge outline + check -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M70.5,25.2 a8.3,8.3 0 1,1 -0.01,0 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3" />
+    <path
+        android:pathData="M66.6,33.5 L69.4,36.3 L74.1,30.2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
