@@ -30,7 +30,7 @@ PrepVault helps you keep an **Error Book** and an **Unsolved Question Book**, pl
 - **Statistics** — total errors / unsolved / solved / tasks completed / revision sessions, current & longest streak, errors by subject / mistake type, unsolved by source.
 - **Revision Sessions** — focused walks through due errors with Understood / Needs Revision / Still Confused outcomes.
 - **Search** — global search across Error Book and Unsolved Book.
-- **Firebase** — email/password + Google sign-in, Cloud Firestore (per-user subcollections), Storage (per-user image folders), Crashlytics (crashes only — no PII).
+- **Firebase** — Firebase-first authentication: email/password + Google sign-in (Firebase Auth is authoritative; Room caches the profile), Cloud Firestore (per-user subcollections), Storage (per-user image folders), Crashlytics (crashes only — no PII).
 - **Offline-first** — Room is the local source of truth; a WorkManager worker syncs pending changes to Firestore when connectivity returns. Adding errors, unsolved questions, tasks, progress, and reviews works fully offline.
 - **Backup & Restore** — JSON export/import of all user-owned data.
 - **Manage Screens** — create / rename / delete custom sources, chapters, and tags.
@@ -47,7 +47,7 @@ PrepVault helps you keep an **Error Book** and an **Unsolved Question Book**, pl
 | Async | Kotlin Coroutines + Flow |
 | Local DB | Room (with KSP codegen) |
 | Cloud DB | Cloud Firestore |
-| Auth | Local accounts (PBKDF2) + optional Firebase Auth |
+| Auth | Firebase Auth (authoritative) + local-only fallback (Room + PBKDF2) |
 | Storage | Firebase Storage |
 | Background sync | WorkManager (periodic + on-demand) |
 | Settings | DataStore Preferences |
@@ -110,14 +110,14 @@ Android Studio will offer to "Sync Project with Gradle Files". Accept — this g
 - Connect an Android device or start an emulator (API 24+).
 - In Android Studio: Run ▶.
 
-**The app works with zero setup.** Local accounts (email + password, stored securely on-device) and “Continue with Google” both appear on the login screen; email/password works out of the box.
+**The app works with zero setup.** The committed `app/google-services.json` points at a real Firebase project, so email/password registration and "Continue with Google" both work immediately (Firebase is authoritative — they need internet). If Firebase is ever unreachable *by configuration* (placeholder config), the app automatically falls back to on-device accounts so email/password still works.
 
-### 3. (Optional) Firebase — cloud sync + Google Sign-In
+### 3. Firebase — cloud sync + Google Sign-In
 
 The repo already contains a real `app/google-services.json` (Firebase client identifiers only — they are not secrets; access is guarded by `firestore.rules` / `storage.rules`). To switch it to YOUR own Firebase project:
 
 1. Go to <https://console.firebase.google.com/> and **Add Project** (or use the existing `epsilon-studyinfo` project).
-2. Add an **Android app** with package name `com.studyinfo.app`.
+2. Add an **Android app** with package name `com.studyinfo.app` — the package name must match **exactly**; do not change it to work around OAuth problems.
 3. Download `google-services.json` and place it at `app/google-services.json`.
 4. In **Authentication → Sign-in method**, enable:
    - Email / Password
@@ -130,26 +130,80 @@ The repo already contains a real `app/google-services.json` (Firebase client ide
    ```
    (Requires the Firebase CLI: `npm i -g firebase-tools`.)
 
-#### Enabling “Continue with Google” (one-time, per Firebase project)
+---
 
-> ✅ **Already done for this project** — the committed `app/google-services.json` contains the OAuth client entries, and the SHA-1 of the shared debug keystore is registered in Firebase. Google Sign-In works out of the box in CI/debug builds. The steps below are only needed if you switch to a different Firebase project.
+## Authentication Architecture
 
-Google Sign-In only works after the **SHA-1 fingerprint** of the APK's signing key is registered in Firebase:
+PrepVault uses a **Firebase-first** auth model with a single canonical identity:
 
-1. **Debug builds (CI + local)** are all signed with the shared keystore committed at `keystores/prepvault-debug.keystore` (password `android`). Its fingerprints are:
+```
+                 ┌────────────────────────────────────────────────┐
+                 │  Firebase Authentication  =  AUTHORITY          │
+                 │  (email/password, Google ID token)              │
+                 └───────────────┬────────────────────────────────┘
+                                 │ Firebase UID (canonical account id)
+        ┌────────────────────────┼────────────────────────┐
+        ▼                        ▼                        ▼
+  local session           Room local_accounts        Firestore users/{uid}
+  (SessionManager)         (profile CACHE only)       (cloud profile + data)
+```
 
-   - SHA-1: `D6:1A:90:7C:C9:00:21:A5:5F:1D:A7:49:F3:71:CC:97:8F:2E:20:BB`
-   - SHA-256: `AE:4E:89:74:19:D5:45:00:35:A4:F5:6A:91:C4:25:E2:55:C8:5E:47:1A:49:EC:88:AD:2D:87:2B:5A:EB:75:E8`
+- **Firebase UID = canonical user/account ID.** The session, the Room `local_accounts` cache row and the Firestore `users/{uid}` document all share it — there is no second, locally generated identity for Firebase-backed users.
+- **Room is a cache, not a second auth server.** Login and registration always ask Firebase first when it is configured. Firebase failures are surfaced to the UI — the UI can never claim "logged in" because a local account succeeded while Firebase actually failed.
+- **The local PBKDF2 password hash is a non-authoritative fallback credential** (only used in local-only mode), refreshed after each successful Firebase password sign-in.
+- **Stale migrations.** Accounts created by older app versions (locally generated ids) are migrated to the Firebase UID on the next sign-in with the same email — *before* the cross-account data-wipe check runs — so the user's study data is preserved, never deleted.
+- **Local-only fallback.** If Firebase is genuinely unavailable (placeholder `google-services.json`), the app falls back to Room + PBKDF2 auth so it remains fully usable offline. Email/password registration and login work; Google Sign-In requires Firebase and reports a clear configuration error instead of failing silently.
+- **Account linking policy.** If an email registered with a password later signs in with Google, Firebase reports a collision; the app shows a clear error ("log in with your email and password instead") and never merges accounts or overwrites credentials automatically. Safe linking would use Firebase's official `linkWithCredential` after a fresh password sign-in.
+- **Sign-out** signs out Firebase, resets the Credential Manager (Google picker) and clears the local session — while **preserving** the study data of the Firebase UID that just signed out. A *different* user signing in wipes user-generated tables (no cross-account leakage).
+- **Account deletion** is Firebase-authoritative: local cleanup happens only after Firebase succeeds.
 
-   Verify yourself with:
-   ```bash
-   keytool -list -v -keystore keystores/prepvault-debug.keystore -alias androiddebugkey -storepass android
-   ```
-2. In Firebase Console → **Project settings → Your apps → com.studyinfo.app → Add fingerprint**, paste the SHA-1 (add the SHA-256 too).
-3. In **Authentication → Sign-in method**, make sure **Google** is **Enabled**.
-4. **Re-download** `google-services.json` (it now contains the OAuth client entries) and replace `app/google-services.json` in the repo.
+### Error messages users can act on
 
-Until steps 2–4 are done, the Google button shows a friendly explanation instead of the account picker — email/password sign-in is unaffected.
+| Firebase says | User sees |
+| --- | --- |
+| invalid credentials | Incorrect email or password. |
+| user not found | No account found with this email. |
+| email collision | An account with this email already exists. |
+| weak password | Password must be at least 6 characters. |
+| network error | Check your internet connection and try again. |
+| Google provider disabled | Enable it in Firebase Console → Authentication → Sign-in method. |
+| signature mismatch (API code 10 / DEVELOPER_ERROR) | This APK's SHA-1 fingerprint is not registered in Firebase… (full fix in the message) |
+| Google token expired | Your Google sign-in session expired. Please try again. |
+
+---
+
+## Google Sign-In setup (SHA-1 fingerprints)
+
+Google Sign-In has two hard configuration requirements — both are one-time, per Firebase project:
+
+1. The **Google provider** must be enabled in **Firebase Console → Authentication → Sign-in method**.
+2. The **SHA-1 fingerprint of the APK's signing certificate** must be registered on the Firebase Android app (**Project settings → Your apps → com.studyinfo.app → Add fingerprint**). After adding a fingerprint, **re-download `google-services.json`** and replace `app/google-services.json`, then rebuild — the OAuth client entries in that file are fingerprint-bound.
+
+The app itself reads the **web OAuth client id** (`client_type` 3) that the google-services plugin generates as `default_web_client_id`, and passes it to `GetGoogleIdOption.setServerClientId(...)` — the correct, required usage.
+
+### Debug builds
+
+All debug APKs — CI and local — are signed with the shared keystore committed at `keystores/prepvault-debug.keystore` (password `android`). Its fingerprints are:
+
+- SHA-1: `D6:1A:90:7C:C9:00:21:A5:5F:1D:A7:49:F3:71:CC:97:8F:2E:20:BB`
+- SHA-256: `AE:4E:89:74:19:D5:45:00:35:A4:F5:6A:91:C4:25:E2:55:C8:5E:47:1A:49:EC:88:AD:2D:87:2B:5A:EB:75:E8`
+
+Verify yourself with:
+```bash
+keytool -list -v -keystore keystores/prepvault-debug.keystore -alias androiddebugkey -storepass android
+```
+
+> ✅ Both values are already registered on the `epsilon-studyinfo` Firebase project, and the committed `google-services.json` contains the matching OAuth client entries — Google Sign-In works out of the box for CI/debug builds.
+>
+> ⚠️ **Testing with a different signature?** If you sign a debug APK with your own `~/.android/debug.keystore` (or test a release build), Google will reject it with `DEVELOPER_ERROR` (code 10) because that certificate is not registered. Register *your* build's actual SHA-1 in Firebase Console, re-download `google-services.json`, rebuild — do **not** invent or hard-code fingerprints in the app.
+
+### Release builds
+
+Release APKs are signed with your own release keystore (see [Release Signing](#release-signing)). Get its fingerprint and register it too:
+```bash
+keytool -list -v -keystore prepvault-release.keystore -alias prepvault
+```
+Then re-download `google-services.json` (it will then contain OAuth clients bound to *both* fingerprints) and commit it.
 
 ---
 

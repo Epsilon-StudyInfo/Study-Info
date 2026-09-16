@@ -6,20 +6,22 @@ import androidx.room.PrimaryKey
 import java.util.Date
 
 /**
- * A locally-stored account.
+ * A locally cached account.
  *
- * PrepVault is offline-first: Room is the source of truth, so accounts live here too.
- * Passwords are stored ONLY as PBKDF2-HMAC-SHA256 hashes with a per-account random salt —
- * the plaintext password is never persisted anywhere.
+ * When Firebase is configured, Firebase Authentication is AUTHORITATIVE: this row is a
+ * CACHE of the Firebase user's profile, and [id] is the Firebase UID (the canonical
+ * account id — Room, session and Firestore `users/{uid}` all share it). The PBKDF2
+ * [passwordHash] is a NON-AUTHORITATIVE fallback credential used only when the app runs
+ * without Firebase (placeholder google-services.json); it can never bypass Firebase in a
+ * Firebase-configured build because login is Firebase-first.
  *
  * Two sign-in providers are supported:
- *  - [AccountProvider.PASSWORD] — classic email + password (hash stored locally).
- *  - [AccountProvider.GOOGLE]    — "Continue with Google"; [passwordHash] is empty and
- *    the account is instead identified by the Google account id embedded in [id].
+ *  - [AccountProvider.PASSWORD] — email + password (Firebase `createUserWithEmailAndPassword`).
+ *  - [AccountProvider.GOOGLE] — "Continue with Google" (Credential Manager → Firebase).
  *
- * When the developer configures a real Firebase project, the same credentials are also
- * (best-effort) mirrored to Firebase Auth so cloud sync keeps working; but the app is fully
- * functional with local accounts alone.
+ * When Firebase is NOT configured the app falls back to LOCAL-ONLY auth: Room + PBKDF2,
+ * with a locally generated UUID as [id]. Passwords are stored ONLY as
+ * PBKDF2-HMAC-SHA256 hashes with a per-account random salt — never plaintext.
  */
 object AccountProvider {
     const val PASSWORD = "PASSWORD"

@@ -79,9 +79,13 @@ object ServiceLocator {
 
             sessionManager = SessionManager(context.applicationContext)
 
-            val authDs = if (firebaseAuthInstance != null && firestoreInstance != null) {
-                FirebaseAuthDataSource(firebaseAuthInstance, firestoreInstance)
-            } else null
+            // FirebaseAuthService (implemented by FirebaseAuthDataSource): when present,
+            // Firebase Authentication is the AUTHORITATIVE identity provider; Room's
+            // local_accounts table is only a cache. Null → local-only auth fallback.
+            val authDs: FirebaseAuthService? =
+                if (firebaseAuthInstance != null && firestoreInstance != null) {
+                    FirebaseAuthDataSource(firebaseAuthInstance, firestoreInstance)
+                } else null
 
             authRepository = AuthRepository(
                 firebaseAuth = authDs,

@@ -65,8 +65,15 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    /** True when the committed google-services.json has OAuth clients (Google enabled). */
-    fun isGoogleAvailable(context: Context): Boolean = GoogleAuth.isConfigured(context)
+    /**
+     * True when "Continue with Google" can work: the WEB OAuth client id must be present
+     * in the merged google-services.json AND Firebase must be configured in this build
+     * (Firebase authenticates the Google ID token — it is authoritative).
+     */
+    fun isGoogleAvailable(context: Context): Boolean =
+        GoogleAuth.isConfigured(context) &&
+            ServiceLocator.isInitialised() &&
+            ServiceLocator.authRepository.isFirebaseConfigured
 
     /**
      * "Continue with Google": the Credential Manager picker must be launched from an
