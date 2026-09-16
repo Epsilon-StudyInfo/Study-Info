@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Which auth form the user is on — drives validation and the submit action. */
 enum class AuthMode { LOGIN, REGISTER, FORGOT }
@@ -85,13 +86,20 @@ class AuthViewModel : ViewModel() {
         if (state.loading || state.success) return
         _ui.value = state.copy(loading = true, error = null)
         viewModelScope.launch {
+            // The account picker is user-paced (NOT a hang) — no watchdog here.
             val profile = withContext(Dispatchers.Main) {
                 GoogleAuth.signIn(activityContext)
             }
             when (profile) {
                 is AppResult.Success -> {
-                    val result = withContext(Dispatchers.IO) {
-                        ServiceLocator.authRepository.signInWithGoogle(profile.value)
+                    // Watchdog only around the network/backend part: if it ever stalls
+                    // (pathological network), surface a clear error instead of an
+                    // eternal spinner. A late completion is still honoured — the splash
+                    // gate repairs the session on the next launch.
+                    val result = withAuthWatchdog {
+                        withContext(Dispatchers.IO) {
+                            ServiceLocator.authRepository.signInWithGoogle(profile.value)
+                        }
                     }
                     when (result) {
                         is AppResult.Success -> _ui.value = _ui.value.copy(loading = false, success = true)
@@ -121,13 +129,15 @@ class AuthViewModel : ViewModel() {
 
         _ui.value = state.copy(loading = true, error = null)
         viewModelScope.launch {
-            val result: AppResult<*> = when (state.mode) {
-                AuthMode.LOGIN ->
-                    ServiceLocator.authRepository.login(state.email, state.password)
-                AuthMode.REGISTER ->
-                    ServiceLocator.authRepository.register(state.name, state.email, state.password)
-                AuthMode.FORGOT ->
-                    ServiceLocator.authRepository.sendPasswordReset(state.email)
+            val result = withAuthWatchdog {
+                when (state.mode) {
+                    AuthMode.LOGIN ->
+                        ServiceLocator.authRepository.login(state.email, state.password)
+                    AuthMode.REGISTER ->
+                        ServiceLocator.authRepository.register(state.name, state.email, state.password)
+                    AuthMode.FORGOT ->
+                        ServiceLocator.authRepository.sendPasswordReset(state.email)
+                }
             }
             when (result) {
                 is AppResult.Success -> _ui.value = _ui.value.copy(
@@ -138,6 +148,19 @@ class AuthViewModel : ViewModel() {
                 is AppResult.Failure -> _ui.value = _ui.value.copy(loading = false, error = result.message)
             }
         }
+    }
+
+    /**
+     * Hard 45s ceiling on any single auth operation so the button can never spin forever,
+     * whatever the network does. The underlying work is not aborted — if it completes
+     * later the success state still lands (and the splash gate self-heals the session
+     * on the next launch).
+     */
+    private suspend fun <T> withAuthWatchdog(block: suspend () -> AppResult<T>): AppResult<T> {
+        val result = withTimeoutOrNull(AUTH_TIMEOUT_MS) { block() }
+        return result ?: AppResult.failure(
+            "This is taking unusually long — check your internet connection and try again.",
+        )
     }
 
     private fun validate(state: AuthUiState): String? = when (state.mode) {
@@ -163,5 +186,8 @@ class AuthViewModel : ViewModel() {
 
     companion object {
         private val EMAIL_REGEX = Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+
+        /** Ceiling for a single auth operation (see [withAuthWatchdog]). */
+        private const val AUTH_TIMEOUT_MS = 45_000L
     }
 }

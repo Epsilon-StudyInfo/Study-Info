@@ -18,8 +18,8 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE syncState != 'PENDING_DELETE' AND dueDate BETWEEN :start AND :end ORDER BY dueDate ASC, CASE priority WHEN 'URGENT' THEN 4 WHEN 'HIGH' THEN 3 WHEN 'MEDIUM' THEN 2 ELSE 1 END DESC")
     fun observeForRange(start: Long, end: Long): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE syncState != 'PENDING_DELETE' AND dueDate < :now AND status != :completed AND status != :skipped ORDER BY dueDate ASC")
-    fun observeOverdue(now: Long, completed: TaskStatus = TaskStatus.COMPLETED, skipped: TaskStatus = TaskStatus.SKIPPED): Flow<List<TaskEntity>>
+    @Query("SELECT * FROM tasks WHERE syncState != 'PENDING_DELETE' AND dueDate < :cutoff AND status != :completed AND status != :skipped ORDER BY dueDate ASC")
+    fun observeOverdue(cutoff: Long, completed: TaskStatus = TaskStatus.COMPLETED, skipped: TaskStatus = TaskStatus.SKIPPED): Flow<List<TaskEntity>>
 
     @Query("SELECT * FROM tasks WHERE syncState != 'PENDING_DELETE' AND status = :status ORDER BY completedAt DESC")
     fun observeByStatus(status: TaskStatus): Flow<List<TaskEntity>>

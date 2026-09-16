@@ -88,7 +88,14 @@ fun PrepVaultRoot() {
                 LaunchedEffect(Unit) {
                     kotlinx.coroutines.delay(500)
                     val signedIn = runCatching {
-                        ServiceLocator.authRepository.isSignedIn()
+                        // Repair-first: if Firebase has a persisted user but the local session
+                        // is missing/stale (e.g. the process died mid-sign-in), re-run the
+                        // standard activation so Room data is only ever shown for its owner.
+                        if (ServiceLocator.authRepository.isSignedIn()) {
+                            ServiceLocator.authRepository.restoreSessionIfNeeded()
+                        } else {
+                            false
+                        }
                     }.getOrDefault(false)
                     if (signedIn) {
                         nav.navigate(Routes.HOME) { popUpTo(0) { inclusive = true } }

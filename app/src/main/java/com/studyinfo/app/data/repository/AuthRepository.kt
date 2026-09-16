@@ -70,6 +70,41 @@ class AuthRepository(
 
     fun isSignedIn(): Boolean = session.isActive || firebaseAuth?.isSignedIn() == true
 
+    /**
+     * Splash-gate repair path. Firebase persists a signed-in user across process death, so
+     * the app can come up with `firebaseAuth.isSignedIn() == true` while the LOCAL session
+     * is missing or stale — e.g. the process was killed while a sign-in was still writing
+     * the Room cache, or an account switch was interrupted. Room data must never be shown
+     * (or synced) in that state for a user that does not own it.
+     *
+     * Re-runs the standard activation for the persisted Firebase user:
+     *  - missing/stale session → the cache row is created/migrated (by uid, then email) and
+     *    the ownership-swap wipe runs BEFORE any data is visible, exactly like a normal
+     *    sign-in;
+     *  - session already matches the Firebase uid → no-op.
+     *
+     * When Firebase is NOT configured (local-only build) the local session stands on its
+     * own and nothing needs repairing. Returns true when the app should enter HOME.
+     */
+    suspend fun restoreSessionIfNeeded(): Boolean {
+        val fb = firebaseAuth ?: return session.isActive
+        val user = fb.currentUser ?: return session.isActive
+
+        if (session.isActive && session.activeAccountId == user.uid) return true
+
+        // Provider label for the cache row: keep what an earlier visit recorded, else PASSWORD
+        // (the label is cosmetic — the Firebase uid is what matters).
+        val provider = localAccounts.findById(user.uid)?.provider ?: AccountProvider.PASSWORD
+        val account = syncLocalAccountToFirebaseUser(
+            user = user,
+            provider = provider,
+            fallbackName = user.displayName.orEmpty(),
+        )
+        localAccounts.touchLogin(account.id, nowEpoch())
+        activateAccount(account)
+        return true
+    }
+
     // ---------------------------------------------------------------- register
 
     /**

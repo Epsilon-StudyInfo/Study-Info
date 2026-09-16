@@ -12,9 +12,15 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -22,6 +28,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.studyinfo.app.R
 import com.studyinfo.app.navigation.Routes
+import com.studyinfo.app.sync.SyncWorker
 import com.studyinfo.app.ui.components.EmptyStateCard
 import com.studyinfo.app.ui.components.ProgressBar
 import com.studyinfo.app.ui.components.SectionHeader
@@ -33,6 +40,19 @@ fun HomeScreen(
     vm: HomeViewModel = viewModel(),
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // Pull cloud data promptly after sign-in. The splash/activity-level one-time sync only
+    // fires on process start — right after logging in the user would otherwise wait for
+    // the 15-minute periodic sync before their cloud data appears. Runs at most once per
+    // process (REPLACE policy on the worker itself also prevents stacking).
+    var postLoginSynced by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!postLoginSynced) {
+            postLoginSynced = true
+            runCatching { SyncWorker.enqueueOneTime(context) }
+        }
+    }
     Scaffold { padding ->
         Column(
             modifier = Modifier

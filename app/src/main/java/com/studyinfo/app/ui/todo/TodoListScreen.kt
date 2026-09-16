@@ -62,19 +62,19 @@ fun TodoListScreen(
                         }
                     }
                 }
-                items(ui.today, key = { "today-${it.id}" }) { task -> TaskRow(task, onToggle = vm::toggleStatus, onDelete = vm::delete, onClick = { nav.navigate(Routes.taskEdit(task.id)) }) }
+                items(ui.today, key = { "today-${it.id}" }) { task -> TaskRow(task, overdue = false, onToggle = vm::toggleStatus, onDelete = vm::delete, onClick = { nav.navigate(Routes.taskEdit(task.id)) }) }
             }
             if (ui.overdue.isNotEmpty()) {
                 item { SectionHeader(title = stringResourceSafe(R.string.todo_overdue)) }
-                items(ui.overdue, key = { "over-${it.id}" }) { task -> TaskRow(task, onToggle = vm::toggleStatus, onDelete = vm::delete, onClick = { nav.navigate(Routes.taskEdit(task.id)) }) }
+                items(ui.overdue, key = { "over-${it.id}" }) { task -> TaskRow(task, overdue = true, onToggle = vm::toggleStatus, onDelete = vm::delete, onClick = { nav.navigate(Routes.taskEdit(task.id)) }) }
             }
             if (ui.upcoming.isNotEmpty()) {
                 item { SectionHeader(title = stringResourceSafe(R.string.todo_upcoming)) }
-                items(ui.upcoming, key = { "up-${it.id}" }) { task -> TaskRow(task, onToggle = vm::toggleStatus, onDelete = vm::delete, onClick = { nav.navigate(Routes.taskEdit(task.id)) }) }
+                items(ui.upcoming, key = { "up-${it.id}" }) { task -> TaskRow(task, overdue = false, onToggle = vm::toggleStatus, onDelete = vm::delete, onClick = { nav.navigate(Routes.taskEdit(task.id)) }) }
             }
             if (ui.completed.isNotEmpty()) {
                 item { SectionHeader(title = stringResourceSafe(R.string.todo_completed)) }
-                items(ui.completed.take(15), key = { "done-${it.id}" }) { task -> TaskRow(task, onToggle = vm::toggleStatus, onDelete = vm::delete, onClick = { nav.navigate(Routes.taskEdit(task.id)) }) }
+                items(ui.completed.take(15), key = { "done-${it.id}" }) { task -> TaskRow(task, overdue = false, onToggle = vm::toggleStatus, onDelete = vm::delete, onClick = { nav.navigate(Routes.taskEdit(task.id)) }) }
             }
         }
     }
@@ -83,10 +83,12 @@ fun TodoListScreen(
 @Composable
 private fun TaskRow(
     task: com.studyinfo.app.data.database.entity.TaskEntity,
+    overdue: Boolean,
     onToggle: (com.studyinfo.app.data.database.entity.TaskEntity) -> Unit,
     onDelete: (String) -> Unit,
     onClick: () -> Unit,
 ) {
+    val titleColor = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), onClick = onClick) {
         Row(
             modifier = Modifier.padding(12.dp).fillMaxWidth(),
@@ -97,16 +99,17 @@ private fun TaskRow(
                 onCheckedChange = { onToggle(task) },
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text(task.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(task.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = titleColor)
                 Text(
                     listOfNotNull(
                         task.subject?.displayName,
                         task.chapterName,
                         task.priority.label,
-                        java.text.SimpleDateFormat("MMM d", java.util.Locale.US).format(task.dueDate),
+                        dueLabel(task),
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (overdue) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             IconButton(onClick = { onDelete(task.id) }) {
@@ -114,6 +117,29 @@ private fun TaskRow(
             }
         }
     }
+}
+
+/**
+ * Human due label: "Today" / "Tomorrow" / "Yesterday" / "MMM d" (+ time when set),
+ * so the list reads at a glance instead of making the user decode raw dates.
+ */
+private fun dueLabel(task: com.studyinfo.app.data.database.entity.TaskEntity): String {
+    val today = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    val dayMs = 24L * 60L * 60L * 1000L
+    val dueDay = task.dueDate.time
+    val datePart = when {
+        dueDay >= today && dueDay < today + dayMs -> "Today"
+        dueDay >= today + dayMs && dueDay < today + 2 * dayMs -> "Tomorrow"
+        dueDay >= today - dayMs && dueDay < today -> "Yesterday"
+        else -> java.text.SimpleDateFormat("MMM d", java.util.Locale.US).format(task.dueDate)
+    }
+    val timePart = task.dueTime?.let {
+        java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(it)
+    }
+    return if (timePart != null) "$datePart · $timePart" else datePart
 }
 
 @Composable

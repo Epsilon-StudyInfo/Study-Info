@@ -15,6 +15,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.studyinfo.app.domain.model.*
+import com.studyinfo.app.ui.components.QuestionImageAttachments
 
 @Composable
 fun ErrorEditScreen(
@@ -63,9 +64,20 @@ fun ErrorEditScreen(
             OutlinedTextField(
                 value = ui.questionText,
                 onValueChange = { v -> vm.update { it.copy(questionText = v) } },
-                label = { Text("Question *") },
+                label = { Text("Question") },
+                supportingText = { Text("Type the question — or attach an image below instead.") },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
             )
+
+            QuestionImageAttachments(
+                images = ui.images,
+                enabled = !ui.saving,
+                onPicked = vm::addImages,
+                onRemove = vm::removeImage,
+            )
+            if (ui.imageBusy) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
 
             DropdownField(
                 label = "Subject",

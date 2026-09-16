@@ -11,7 +11,10 @@ import com.studyinfo.app.domain.model.TaskPriority
 import com.studyinfo.app.domain.model.TaskStatus
 import com.studyinfo.app.utils.newId
 import com.studyinfo.app.utils.nowEpoch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -28,28 +31,54 @@ class TaskRepository(
 
     fun observeAll(): Flow<List<TaskEntity>> = dao.observeAll()
     fun observeById(id: String): Flow<TaskEntity?> = dao.observeById(id)
-    fun observeOverdue(): Flow<List<TaskEntity>> = dao.observeOverdue(System.currentTimeMillis())
     fun observeByStatus(status: TaskStatus): Flow<List<TaskEntity>> = dao.observeByStatus(status)
 
-    fun observeForToday(): Flow<List<TaskEntity>> {
-        val (start, end) = todayRange()
-        return dao.observeForRange(start.time, end.time)
-    }
+    /**
+     * OVERDUE = due strictly BEFORE today, not completed, not skipped.
+     *
+     * The old `dueDate < now` boundary showed a task due TODAY at 10am in BOTH the
+     * "Today" and the "Overdue" section after 10am — the duplicated-row bug. A task
+     * whose time has passed today stays in Today (its day is not over yet); it becomes
+     * overdue at the next midnight.
+     */
+    fun observeOverdue(): Flow<List<TaskEntity>> =
+        dayTicker().flatMapLatest { dao.observeOverdue(startOfTodayMillis()) }
 
-    fun observeUpcoming(): Flow<List<TaskEntity>> {
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0); cal.clear(Calendar.MINUTE); cal.clear(Calendar.SECOND); cal.clear(Calendar.MILLISECOND)
-        val start = cal.timeInMillis + 24L * 60L * 60L * 1000L // tomorrow
-        val end = start + 30L * 24L * 60L * 60L * 1000L // +30d
-        return dao.observeForRange(start, end)
-    }
+    fun observeForToday(): Flow<List<TaskEntity>> =
+        dayTicker().flatMapLatest {
+            val (start, end) = todayRange()
+            dao.observeForRange(start.time, end.time)
+        }
 
-    fun observeTodayCompletion(): Flow<Pair<Int, Int>> {
-        val (start, end) = todayRange()
-        return kotlinx.coroutines.flow.combine(
-            dao.observeTotalCountForRange(start.time, end.time),
-            dao.observeCompletedCountForRange(start.time, end.time),
-        ) { total, completed -> total to completed }
+    /** Upcoming = from tomorrow up to 30 days out. */
+    fun observeUpcoming(): Flow<List<TaskEntity>> =
+        dayTicker().flatMapLatest {
+            val start = startOfTodayMillis() + DAY_MILLIS
+            val end = start + 30L * DAY_MILLIS
+            dao.observeForRange(start, end)
+        }
+
+    fun observeTodayCompletion(): Flow<Pair<Int, Int>> =
+        dayTicker().flatMapLatest {
+            val (start, end) = todayRange()
+            kotlinx.coroutines.flow.combine(
+                dao.observeTotalCountForRange(start.time, end.time),
+                dao.observeCompletedCountForRange(start.time, end.time),
+            ) { total, completed -> total to completed }
+        }
+
+    /**
+     * Emits immediately, then again shortly after every LOCAL midnight, so the
+     * today/upcoming/overdue windows recompute even when the app stays open across a
+     * date change (the old flows froze the boundaries at ViewModel creation).
+     */
+    private fun dayTicker(): Flow<Unit> = flow {
+        while (true) {
+            emit(Unit)
+            val now = System.currentTimeMillis()
+            val nextMidnight = startOfTodayMillis() + DAY_MILLIS + 2_000L
+            delay((nextMidnight - now).coerceIn(1_000L, DAY_MILLIS))
+        }
     }
 
     suspend fun getById(id: String): TaskEntity? = dao.getById(id)
@@ -183,12 +212,17 @@ class TaskRepository(
 
     // ---------- Helpers ----------
     private fun todayRange(): Pair<Date, Date> {
+        val start = startOfTodayMillis()
+        return Date(start) to Date(start + DAY_MILLIS)
+    }
+
+    /** Local-midnight timestamp of "now" — the boundary for today/overdue windows. */
+    private fun startOfTodayMillis(): Long {
         val cal = Calendar.getInstance(TimeZone.getDefault()).apply {
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }
-        val start = cal.time
-        cal.add(Calendar.DAY_OF_YEAR, 1)
-        return start to cal.time
+        return cal.timeInMillis
     }
 
     fun todayKey(): String {
@@ -204,5 +238,9 @@ class TaskRepository(
             else -> return null
         }
         return cal.time
+    }
+
+    private companion object {
+        const val DAY_MILLIS = 24L * 60L * 60L * 1000L
     }
 }

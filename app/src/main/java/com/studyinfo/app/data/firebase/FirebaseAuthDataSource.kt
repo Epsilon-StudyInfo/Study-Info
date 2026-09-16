@@ -12,7 +12,13 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.studyinfo.app.utils.AppResult
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
 import java.util.Date
 
@@ -23,16 +29,26 @@ import java.util.Date
  * registration / login / deletion succeeds, and its failures are surfaced to the UI.
  *
  * Post-authentication side effects — display-name update, verification email, and the
- * Firestore `users/{uid}` profile document — are deliberately NON-FATAL (each `runCatching`
- * below is logged and marked): by the time they run the auth account already exists, so
- * failing them would turn a successful registration into a reported failure, and the
- * retry would then hit "email already in use". The Firestore profile self-heals on the
- * next sign-in via [ensureFirestoreUser].
+ * Firestore `users/{uid}` profile document — run OFF the sign-in critical path in a
+ * background [sideEffects] scope, each bounded by [SIDE_EFFECT_TIMEOUT_MS]:
+ *
+ *  - NON-FATAL: by the time they run the auth account already exists, so failing them
+ *    would turn a successful sign-in into a reported failure (and a retry would then hit
+ *    "email already in use"). The Firestore profile self-heals on the next sign-in via
+ *    [ensureFirestoreUser].
+ *  - NON-BLOCKING: awaiting a Firestore write inside the sign-in flow used to leave the
+ *    UI spinner running forever whenever Firestore was unreachable (the write retries
+ *    indefinitely offline) even though Firebase Auth had ALREADY succeeded — the exact
+ *    "button keeps loading but I'm logged in after restart" bug. The auth result now
+ *    returns as soon as the Firebase Auth call itself completes.
  */
 class FirebaseAuthDataSource(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
 ) : FirebaseAuthService {
+
+    /** Background scope for post-auth side effects. SupervisorJob: one failed/killed side effect never cancels the others. */
+    private val sideEffects = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override val currentUser: FirebaseUserInfo?
         get() = auth.currentUser?.toInfo()
@@ -50,20 +66,29 @@ class FirebaseAuthDataSource(
         val user = result.user
             ?: return AppResult.failure("Registration failed. Please try again.")
 
-        // NON-FATAL (account already exists at this point; retried/repaired later):
-        runCatching {
-            user.updateProfile(
-                UserProfileChangeRequest.Builder().setDisplayName(name).build(),
-            ).await()
-        }.onFailure { Log.w(TAG, "register: updateProfile failed (non-fatal)", it) }
+        // Post-auth side effects run in the BACKGROUND: the account already exists, so
+        // these must neither fail nor DELAY the reported registration outcome.
+        sideEffects.launch {
+            // Display name (bounded; non-fatal — the local cache row keeps the entered name
+            // and this is retried on later sign-ins).
+            runCatching {
+                withTimeout(SIDE_EFFECT_TIMEOUT_MS) {
+                    user.updateProfile(
+                        UserProfileChangeRequest.Builder().setDisplayName(name).build(),
+                    ).await()
+                }
+            }.onFailure { Log.w(TAG, "register: updateProfile failed (non-fatal)", it) }
 
-        // NON-FATAL (the user can request a new verification email from Settings):
-        runCatching { user.sendEmailVerification().await() }
-            .onFailure { Log.w(TAG, "register: sendEmailVerification failed (non-fatal)", it) }
+            // Verification email (non-fatal — the user can request a new one from Settings).
+            runCatching {
+                withTimeout(SIDE_EFFECT_TIMEOUT_MS) { user.sendEmailVerification().await() }
+            }.onFailure { Log.w(TAG, "register: sendEmailVerification failed (non-fatal)", it) }
 
-        // NON-FATAL (Firestore profile is re-created on the next sign-in):
-        runCatching { createFirestoreUser(user, displayName = name) }
-            .onFailure { Log.w(TAG, "register: Firestore profile creation failed (non-fatal)", it) }
+            // Firestore profile (non-fatal — re-created on the next sign-in).
+            runCatching {
+                withTimeout(SIDE_EFFECT_TIMEOUT_MS) { createFirestoreUser(user, displayName = name) }
+            }.onFailure { Log.w(TAG, "register: Firestore profile creation failed (non-fatal)", it) }
+        }
 
         AppResult.success(user.toInfo())
     } catch (e: FirebaseAuthUserCollisionException) {
@@ -85,9 +110,12 @@ class FirebaseAuthDataSource(
         val result = auth.signInWithEmailAndPassword(email, password).await()
         val user = result.user
             ?: return AppResult.failure("Login failed. Please try again.")
-        // NON-FATAL (profile sync must not fail the login itself):
-        runCatching { ensureFirestoreUser(user) }
-            .onFailure { Log.w(TAG, "login: Firestore profile sync failed (non-fatal)", it) }
+        // Background + bounded: profile sync must neither fail nor DELAY the login.
+        sideEffects.launch {
+            runCatching {
+                withTimeout(SIDE_EFFECT_TIMEOUT_MS) { ensureFirestoreUser(user) }
+            }.onFailure { Log.w(TAG, "login: Firestore profile sync failed (non-fatal)", it) }
+        }
         AppResult.success(user.toInfo())
     } catch (e: FirebaseAuthInvalidUserException) {
         AppResult.failure("No account found with this email.")
@@ -105,14 +133,20 @@ class FirebaseAuthDataSource(
         val user = result.user
             ?: return AppResult.failure("Google sign-in failed. Please try again.")
 
-        // NON-FATAL (Firestore profile sync must not fail the login itself):
-        runCatching {
-            if (result.additionalUserInfo?.isNewUser == true) {
-                createFirestoreUser(user, displayName = user.displayName.orEmpty())
-            } else {
-                updateLastLogin(user)
-            }
-        }.onFailure { Log.w(TAG, "google: Firestore profile sync failed (non-fatal)", it) }
+        // Background + bounded: the Firestore profile must never delay the sign-in result
+        // (an unreachable Firestore used to leave the button spinning forever here even
+        // though Firebase Auth had already succeeded).
+        sideEffects.launch {
+            runCatching {
+                withTimeout(SIDE_EFFECT_TIMEOUT_MS) {
+                    if (result.additionalUserInfo?.isNewUser == true) {
+                        createFirestoreUser(user, displayName = user.displayName.orEmpty())
+                    } else {
+                        updateLastLogin(user)
+                    }
+                }
+            }.onFailure { Log.w(TAG, "google: Firestore profile sync failed (non-fatal)", it) }
+        }
 
         AppResult.success(user.toInfo())
     } catch (e: FirebaseAuthUserCollisionException) {
@@ -196,9 +230,15 @@ class FirebaseAuthDataSource(
         val user = auth.currentUser
             ?: return AppResult.failure("Not signed in.")
         return try {
-            // NON-FATAL (cloud data cleanup must not keep a deleted Auth user "alive"):
-            runCatching { FirestorePaths.deleteUserTree(firestore, user.uid) }
-                .onFailure { Log.w(TAG, "deleteAccount: Firestore cleanup failed (non-fatal)", it) }
+            // Bounded best-effort cloud cleanup: it must never hang the deletion. If it
+            // times out the leftover documents are still protected by the per-user
+            // security rules (nobody — not even their owner — can read a deleted user's
+            // data without a matching auth uid), so this is safe to abandon.
+            runCatching {
+                withTimeoutOrNull(CLOUD_CLEANUP_TIMEOUT_MS) {
+                    FirestorePaths.deleteUserTree(firestore, user.uid)
+                }
+            }.onFailure { Log.w(TAG, "deleteAccount: Firestore cleanup failed (non-fatal)", it) }
 
             // Authoritative deletion of the Auth account.
             user.delete().await()
@@ -294,5 +334,11 @@ class FirebaseAuthDataSource(
 
     private companion object {
         const val TAG = "FirebaseAuthDS"
+
+        /** Per-operation cap for background post-auth side effects (Firestore/Auth profile writes). */
+        const val SIDE_EFFECT_TIMEOUT_MS = 20_000L
+
+        /** Cap for the cloud cleanup that precedes account deletion. */
+        const val CLOUD_CLEANUP_TIMEOUT_MS = 10_000L
     }
 }

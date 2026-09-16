@@ -15,6 +15,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.studyinfo.app.domain.model.*
+import com.studyinfo.app.ui.components.QuestionImageAttachments
 import com.studyinfo.app.ui.errors.DropdownField
 
 @Composable
@@ -59,7 +60,23 @@ fun UnsolvedEditScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             OutlinedTextField(value = ui.title, onValueChange = { v -> vm.update { it.copy(title = v) } }, label = { Text("Title (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = ui.questionText, onValueChange = { v -> vm.update { it.copy(questionText = v) } }, label = { Text("Question *") }, modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp))
+            OutlinedTextField(
+                value = ui.questionText,
+                onValueChange = { v -> vm.update { it.copy(questionText = v) } },
+                label = { Text("Question") },
+                supportingText = { Text("Type the question — or attach an image below instead.") },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
+            )
+
+            QuestionImageAttachments(
+                images = ui.images,
+                enabled = !ui.saving,
+                onPicked = vm::addImages,
+                onRemove = vm::removeImage,
+            )
+            if (ui.imageBusy) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
 
             DropdownField(label = "Subject", value = ui.subject.displayName, options = Subject.entries.map { it.displayName }, onSelected = { name -> vm.update { it.copy(subject = Subject.fromName(name)) } })
             OutlinedTextField(value = ui.chapterName, onValueChange = { v -> vm.update { it.copy(chapterName = v) } }, label = { Text("Chapter") }, singleLine = true, modifier = Modifier.fillMaxWidth())

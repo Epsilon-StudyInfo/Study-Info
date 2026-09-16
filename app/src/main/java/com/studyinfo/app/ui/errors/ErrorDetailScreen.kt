@@ -23,7 +23,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.studyinfo.app.ServiceLocator
 import com.studyinfo.app.data.database.entity.ErrorEntryEntity
+import com.studyinfo.app.data.database.entity.QuestionImageEntity
+import com.studyinfo.app.data.repository.QuestionImageRepository
 import com.studyinfo.app.navigation.Routes
+import com.studyinfo.app.ui.components.QuestionImageGallery
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +34,7 @@ import kotlinx.coroutines.launch
 
 data class ErrorDetailUiState(
     val entry: ErrorEntryEntity? = null,
+    val images: List<QuestionImageEntity> = emptyList(),
     val loaded: Boolean = false,
 )
 
@@ -48,6 +52,11 @@ class ErrorDetailViewModel : ViewModel() {
             ServiceLocator.errorRepository.observeById(id).collect { entry ->
                 _ui.value = _ui.value.copy(entry = entry, loaded = true)
             }
+        }
+        viewModelScope.launch {
+            ServiceLocator.questionImageRepository
+                .observeForQuestion(QuestionImageRepository.REF_ERROR, id)
+                .collect { images -> _ui.value = _ui.value.copy(images = images) }
         }
     }
     fun toggleFavorite() {
@@ -135,7 +144,10 @@ fun ErrorDetailScreen(
             HorizontalDivider()
 
             SectionLabel("Question")
-            Text(e.questionText, style = MaterialTheme.typography.bodyLarge)
+            if (e.questionText.isNotBlank()) {
+                Text(e.questionText, style = MaterialTheme.typography.bodyLarge)
+            }
+            QuestionImageGallery(images = uiState.images)
 
             if (!e.attemptedSolution.isNullOrBlank()) {
                 SectionLabel("Attempted Solution")

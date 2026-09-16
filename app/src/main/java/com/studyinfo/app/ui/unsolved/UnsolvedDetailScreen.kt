@@ -22,6 +22,7 @@ import androidx.navigation.NavHostController
 import com.studyinfo.app.domain.model.MistakeType
 import com.studyinfo.app.domain.model.UnsolvedStatus
 import com.studyinfo.app.navigation.Routes
+import com.studyinfo.app.ui.components.QuestionImageGallery
 
 @Composable
 fun UnsolvedDetailScreen(
@@ -105,7 +106,10 @@ fun UnsolvedDetailScreen(
             InfoLine("Difficulty", entry.difficulty.label)
             HorizontalDivider()
             Text("Question", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            Text(entry.questionText, style = MaterialTheme.typography.bodyLarge)
+            if (entry.questionText.isNotBlank()) {
+                Text(entry.questionText, style = MaterialTheme.typography.bodyLarge)
+            }
+            QuestionImageGallery(images = ui.images)
             if (!entry.reasonNotSolved.isNullOrBlank()) {
                 Text("Reason not solved", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Text(entry.reasonNotSolved, style = MaterialTheme.typography.bodyLarge)

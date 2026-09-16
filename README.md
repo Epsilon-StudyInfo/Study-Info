@@ -296,6 +296,83 @@ Backup JSON contains **no Firebase credentials**. It is safe to share.
 
 ---
 
+## What's new in v1.5.0
+
+**Google sign-in reliability fix (the “button keeps loading forever” bug).**
+
+Root cause: after Firebase Auth succeeded, the app *awaited* the Firestore profile write
+inside the sign-in coroutine. `runCatching` made that write *non-fatal* but not
+*non-blocking* — when Firestore was slow/unreachable the write retried indefinitely while
+Firebase had already signed the user in (which is why killing and restarting the app showed
+you logged in). Fixes:
+
+- All post-auth side effects (display name, verification email, Firestore profile) now run
+  in a background scope, each capped by a 20-second timeout. The sign-in result returns as
+  soon as the Firebase Auth call itself completes.
+- A 45-second watchdog on every auth operation so the button can never spin forever again,
+  whatever the network does.
+- The splash gate now **repairs** a session that was interrupted mid-sign-in (missing local
+  session with a persisted Firebase user): it re-runs the standard account activation —
+  including the ownership-swap wipe — before any data is shown, which also closes a
+  cross-account data-leak window in that edge case.
+
+**Question images (error book + unsolved questions).** Questions can now be *images*
+instead of typed text — the common case for DPP/module/PYQ screenshots:
+
+- “Add image” tile on the Add/Edit screens (system photo picker, multi-select, no
+  permissions needed) — attach up to 4 images per question.
+- Full-screen preview from the thumbnails and the detail screens; remove with one tap.
+- A question is valid with **text OR image** — the typed text is now optional.
+- Picked images are copied into **app-private storage** (photo-picker grants are
+  transient), downscaled to ≤ 1920 px and compressed under 4 MB, then uploaded to
+  Firebase Storage by the sync queue (`users/{uid}/questions/{qId}/{imageId}`).
+- Moving an unsolved question to the error book **carries its images along**; deleting a
+  question removes its images (local + cloud).
+
+**Todo section fixes.**
+
+- A task due **today** with a passed time no longer appears in BOTH “Today” and
+  “Overdue” (duplicate-row bug). Overdue now means: due strictly before today, not
+  completed, not skipped.
+- Today / Upcoming / Overdue windows now refresh at local midnight instead of freezing at
+  screen-entry, so leaving the app open overnight no longer shows yesterday's “today”.
+- Skipped tasks no longer inflate the daily progress count.
+- Due dates read as “Today / Tomorrow / Yesterday / MMM d” (+ time when set), overdue rows
+  are tinted, and new tasks default to today instead of the exact creation second.
+
+**Cloud data.** A one-time sync now runs right after sign-in (previously you waited up to
+15 minutes for your cloud data to appear after logging in).
+
+---
+
+## Cloud sync setup (one-time, project owner)
+
+The app stores user data in Firestore under `users/{uid}/...` and question images in
+Firebase Storage under `users/{uid}/questions/...`. To switch cloud sync on for your
+Firebase project:
+
+1. **Create the Firestore database** — Firebase Console → Build → Firestore Database →
+   *Create database*. Pick a region and **start in production mode** (NOT test mode —
+   test-mode rules allow public reads for 30 days).
+2. **Create the Storage bucket** — Build → Storage → Get started (same region).
+3. **Deploy the security rules** (both files are in the repo and `firebase.json` wires them
+   up, so from the repo root):
+
+   ```bash
+   npm install -g firebase-tools
+   firebase login
+   firebase use <your-project-id>
+   firebase deploy --only firestore:rules,storage:rules
+   ```
+
+   (Alternative: paste the contents of `firestore.rules` / `storage.rules` into the Rules
+   tabs in the console.)
+
+Until step 3 is done the per-user rules are not active — **do not skip it**. The rules
+ensure every user can only ever read/write their own subtree.
+
+---
+
 ## Firestore & Storage Security
 
 The rules in `firestore.rules` and `storage.rules` enforce:
@@ -314,7 +391,9 @@ A user **cannot** read another user's errors, unsolved questions, tasks, progres
 - All study data is private by default.
 - Crashlytics collects **crash traces only**. It does **not** record question content, solutions, notes, or any other private study material.
 - The app requests only the permissions it needs: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS, and CAMERA (only used if you capture a photo via the in-app intent).
+- Question images live in app-private storage on-device and in per-user Storage paths in the cloud — never in shared/public storage, and never readable by other users (see the rules above).
 - Account deletion removes the Firebase Auth user, the Firestore user document + all subcollections, and (best-effort) the user's Storage tree.
+- `app/google-services.json` contains **client identifiers only** (standard practice, safe to commit). Real secrets never belong in this repo: CI signing uses GitHub *secrets*, and any personal access token used for repo automation should be **regenerated immediately if it was ever pasted into a chat, ticket, or file** (GitHub → Settings → Developer settings → Personal access tokens → rotate).
 
 ---
 
@@ -331,10 +410,13 @@ Planned future work (not implemented in v1.0):
 - Teacher / mentor accounts
 - Study groups and shared collections
 - Auto-generated study plans based on progress
-- In-app image capture with on-device compression pipeline
 - Real-time per-question sync (vs periodic)
 - Wear OS complication for today's tasks
 - Localization (Hindi, Bengali, Tamil, Telugu)
+
+Done in v1.5.0 (removed from the roadmap): *In-app image capture with on-device
+compression pipeline* — question images with private-storage import, downscale +
+compression, and queued Firebase Storage upload.
 
 ---
 
@@ -355,7 +437,11 @@ Tests cover:
 - Streak computation (current / longest)
 - Backup export JSON shape
 - Subject / QuestionSource / Difficulty enum round-trips
-- Google sign-in: new-account creation, deterministic ids, and linking to an existing email/password account
+- Authentication (19 Firebase-first + 13 local-only scenarios: registration/login/google
+  outcomes, UID alignment, stale-account migration, no duplicate accounts, sign-out,
+  deletion, error mapping)
+- Question images: registration + upload-queue enqueue, unsolved→error image transfer
+  (reassign semantics), deletion cleanup, offline queue handling
 
 Tests run on every GitHub Actions build. See `app/src/test/java/com/studyinfo/app/`.
 

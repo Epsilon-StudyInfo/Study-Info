@@ -17,6 +17,8 @@ class UnsolvedRepository(
     private val errorsRemote: FirestoreErrorsDataSource?,
     private val errorDao: com.studyinfo.app.data.database.dao.ErrorDao,
     private val streakRecorder: StreakRecorder? = null,
+    /** Attached-image cleanup/transfer; wired by the ServiceLocator after construction. */
+    internal var questionImages: QuestionImageRepository? = null,
 ) {
 
     // ---------- Observers ----------
@@ -81,6 +83,10 @@ class UnsolvedRepository(
     suspend fun delete(id: String) {
         val existing = dao.getById(id) ?: return
         dao.upsert(existing.copy(updatedAt = Date(nowEpoch()), syncState = SyncState.PENDING_DELETE))
+        // Attached images (local files + Storage binaries + Firestore metadata) are removed
+        // with the question — best-effort so a cloud hiccup can never block the local delete.
+        runCatching { questionImages?.deleteForQuestion(QuestionImageRepository.REF_UNSOLVED, id) }
+            .onFailure { /* non-fatal: orphaned image rows are inert */ }
     }
 
     suspend fun hardDelete(id: String) = dao.delete(id)
@@ -143,6 +149,17 @@ class UnsolvedRepository(
         )
         errorDao.upsert(error)
         dao.markMovedToError(unsolvedId, error.id, nowEpoch())
+        // Attached images follow the question into the error book: their metadata is
+        // re-pointed to the new error id (binaries keep their remote location). Best-effort
+        // — a sync failure must not abort the move itself.
+        runCatching {
+            questionImages?.reassign(
+                fromRefType = QuestionImageRepository.REF_UNSOLVED,
+                fromRefId = unsolvedId,
+                toRefType = QuestionImageRepository.REF_ERROR,
+                toRefId = error.id,
+            )
+        }.onFailure { /* non-fatal: image rows stay on the unsolved record */ }
         return error
     }
 

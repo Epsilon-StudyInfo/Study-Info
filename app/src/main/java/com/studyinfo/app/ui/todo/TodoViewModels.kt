@@ -29,16 +29,23 @@ class TodoListViewModel : ViewModel() {
     init {
         viewModelScope.launch {
             ServiceLocator.taskRepository.observeForToday().collect { list ->
+                // "Today" rows: everything except skipped; counts derive from the SAME list
+                // so the progress bar can never disagree with the visible rows (skipped
+                // tasks used to inflate the total).
+                val todayAll = list.filter { it.status != TaskStatus.SKIPPED }
                 _ui.value = _ui.value.copy(
-                    today = list.filter { it.status != TaskStatus.COMPLETED && it.status != TaskStatus.SKIPPED },
-                    todayCompleted = list.count { it.status == TaskStatus.COMPLETED },
-                    todayTotal = list.size,
+                    today = todayAll.filter { it.status != TaskStatus.COMPLETED },
+                    todayCompleted = todayAll.count { it.status == TaskStatus.COMPLETED },
+                    todayTotal = todayAll.size,
                 )
             }
         }
         viewModelScope.launch {
             ServiceLocator.taskRepository.observeUpcoming().collect { list ->
-                _ui.value = _ui.value.copy(upcoming = list.filter { it.status != TaskStatus.COMPLETED })
+                // Same active-task rule as Today: skipped tasks are hidden, not counted.
+                _ui.value = _ui.value.copy(
+                    upcoming = list.filter { it.status != TaskStatus.COMPLETED && it.status != TaskStatus.SKIPPED },
+                )
             }
         }
         viewModelScope.launch {
@@ -60,6 +67,14 @@ class TodoListViewModel : ViewModel() {
     fun delete(id: String) { viewModelScope.launch { ServiceLocator.taskRepository.delete(id) } }
 }
 
+/** Local midnight of "now" — the sane default due date for a brand-new task. */
+private fun startOfToday(): Date {
+    val cal = Calendar.getInstance()
+    cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+    cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+    return cal.time
+}
+
 data class TaskEditUiState(
     val id: String? = null,
     val title: String = "",
@@ -67,7 +82,10 @@ data class TaskEditUiState(
     val subject: Subject? = Subject.PHYSICS,
     val chapterName: String = "",
     val topic: String = "",
-    val dueDate: Date = Date(),
+    // New tasks default to TODAY (local midnight), not the exact creation second — a
+    // "due now" timestamp made freshly-created tasks look odd and raced the overdue
+    // window near midnight.
+    val dueDate: Date = startOfToday(),
     val dueTime: Date? = null,
     val estimatedMinutes: String = "",
     val priority: TaskPriority = TaskPriority.MEDIUM,

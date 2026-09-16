@@ -21,6 +21,8 @@ class ErrorRepository(
     private val dao: ErrorDao,
     private val remote: FirestoreErrorsDataSource?,
     private val streakRecorder: StreakRecorder? = null,
+    /** Attached-image cleanup; wired by the ServiceLocator after construction. */
+    internal var questionImages: QuestionImageRepository? = null,
 ) {
 
     // ---------- Observers ----------
@@ -105,6 +107,10 @@ class ErrorRepository(
     suspend fun delete(id: String) {
         val existing = dao.getById(id) ?: return
         dao.upsert(existing.copy(updatedAt = Date(nowEpoch()), syncState = SyncState.PENDING_DELETE))
+        // Attached images (local files + Storage binaries + Firestore metadata) are removed
+        // with the question — best-effort so a cloud hiccup can never block the local delete.
+        runCatching { questionImages?.deleteForQuestion(QuestionImageRepository.REF_ERROR, id) }
+            .onFailure { /* non-fatal: orphaned image rows are inert */ }
     }
 
     suspend fun hardDelete(id: String) = dao.delete(id)

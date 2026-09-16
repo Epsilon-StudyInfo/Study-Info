@@ -9,6 +9,7 @@ import com.google.firebase.storage.FirebaseStorage
 import com.studyinfo.app.data.auth.SessionManager
 import com.studyinfo.app.data.database.PrepVaultDatabase
 import com.studyinfo.app.data.firebase.*
+import com.studyinfo.app.data.images.QuestionImageStore
 import com.studyinfo.app.data.repository.*
 import com.studyinfo.app.data.seed.DefaultSeeder
 import kotlinx.coroutines.flow.first
@@ -115,6 +116,7 @@ object ServiceLocator {
                 db.errorDao(),
                 firestoreInstance?.let { FirestoreErrorsDataSource(it, uidProvider()) },
                 streakRecorder,
+                questionImages = null,   // set below (single shared instance)
             )
             unsolvedRepository = UnsolvedRepository(
                 db.unsolvedDao(),
@@ -122,6 +124,7 @@ object ServiceLocator {
                 firestoreInstance?.let { FirestoreErrorsDataSource(it, uidProvider()) },
                 db.errorDao(),
                 streakRecorder,
+                questionImages = null,   // set below (single shared instance)
             )
             taskRepository = TaskRepository(
                 db.taskDao(),
@@ -143,7 +146,12 @@ object ServiceLocator {
                 firestoreInstance?.let { FirestoreQuestionImagesDataSource(it, uidProvider()) },
                 storageInstance?.let { FirebaseStorageDataSource(it, uidProvider()) },
                 db.syncQueueDao(),
+                QuestionImageStore(context),
             )
+            // The error/unsolved repositories clean up (and transfer) attached images via
+            // the shared image repository. Assigned after construction to keep one instance.
+            errorRepository.questionImages = questionImageRepository
+            unsolvedRepository.questionImages = questionImageRepository
             backupRepository = BackupRepository(
                 db.userProfileDao(),
                 db.tagDao(),
