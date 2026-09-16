@@ -29,7 +29,9 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     val ui: StateFlow<SettingsUiState> = _ui.asStateFlow()
 
     fun logout() {
-        ServiceLocator.authRepository.signOut()
+        // Context-aware sign-out: also resets Credential Manager state so the Google
+        // account picker is shown fresh at the next sign-in.
+        ServiceLocator.authRepository.signOut(getApplication())
         _ui.value = _ui.value.copy(loggedOut = true)
     }
 

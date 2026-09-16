@@ -73,6 +73,7 @@ object ServiceLocator {
                 PrepVaultDatabase::class.java,
                 PrepVaultDatabase.NAME,
             )
+                .addMigrations(PrepVaultDatabase.MIGRATION_2_3)
                 .fallbackToDestructiveMigration()
                 .build()
 

@@ -1,13 +1,17 @@
 package com.studyinfo.app.ui.auth
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.studyinfo.app.ServiceLocator
+import com.studyinfo.app.data.auth.GoogleAuth
 import com.studyinfo.app.utils.AppResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Which auth form the user is on — drives validation and the submit action. */
 enum class AuthMode { LOGIN, REGISTER, FORGOT }
@@ -33,6 +37,7 @@ sealed class AuthEvent {
     data class ConfirmPasswordChanged(val value: String) : AuthEvent()
     data object TogglePasswordVisibility : AuthEvent()
     data object Submit : AuthEvent()
+    data class GoogleSignIn(val activityContext: Context) : AuthEvent()
     data object ResetError : AuthEvent()
 }
 
@@ -56,6 +61,44 @@ class AuthViewModel : ViewModel() {
             AuthEvent.TogglePasswordVisibility -> _ui.value = _ui.value.copy(passwordVisible = !_ui.value.passwordVisible)
             AuthEvent.ResetError -> _ui.value = _ui.value.copy(error = null)
             AuthEvent.Submit -> submit()
+            is AuthEvent.GoogleSignIn -> signInWithGoogle(event.activityContext)
+        }
+    }
+
+    /** True when the committed google-services.json has OAuth clients (Google enabled). */
+    fun isGoogleAvailable(context: Context): Boolean = GoogleAuth.isConfigured(context)
+
+    /**
+     * "Continue with Google": the Credential Manager picker must be launched from an
+     * Activity context (passed in from the composable); everything after that runs off
+     * the main thread as usual.
+     */
+    private fun signInWithGoogle(activityContext: Context) {
+        val state = _ui.value
+        if (state.loading || state.success) return
+        _ui.value = state.copy(loading = true, error = null)
+        viewModelScope.launch {
+            val profile = withContext(Dispatchers.Main) {
+                GoogleAuth.signIn(activityContext)
+            }
+            when (profile) {
+                is AppResult.Success -> {
+                    val result = withContext(Dispatchers.IO) {
+                        ServiceLocator.authRepository.signInWithGoogle(profile.value)
+                    }
+                    when (result) {
+                        is AppResult.Success -> _ui.value = _ui.value.copy(loading = false, success = true)
+                        is AppResult.Failure -> _ui.value = _ui.value.copy(
+                            loading = false,
+                            error = result.message.takeIf { it.isNotBlank() },
+                        )
+                    }
+                }
+                is AppResult.Failure -> _ui.value = _ui.value.copy(
+                    loading = false,
+                    error = profile.message.takeIf { it.isNotBlank() },
+                )
+            }
         }
     }
 

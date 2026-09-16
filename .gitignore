@@ -4,17 +4,24 @@
 /.idea/
 .DS_Store
 /build
+/app/build/
 /captures
 .externalNativeBuild
 .cxx
 local.properties
 
 # Firebase
-app/google-services.json
+# NOTE: app/google-services.json IS committed on purpose — it contains only client-side
+# identifiers (not secrets) and Firebase access is guarded by firestore.rules/storage.rules.
+# A GOOGLE_SERVICES_JSON CI secret, if set, overrides it at build time.
 app/debug.keystore
 app/release.keystore
 *.jks
 *.keystore
+
+# ...except the SHARED debug keystore, committed so all CI/local debug APKs share one
+# signature (updates install cleanly) and one Firebase SHA-1 registration.
+!keystores/prepvault-debug.keystore
 
 # Secrets
 secrets.properties

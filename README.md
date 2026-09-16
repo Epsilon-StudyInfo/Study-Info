@@ -106,10 +106,17 @@ cd Study-Info
 
 Android Studio will offer to "Sync Project with Gradle Files". Accept — this generates the local `gradlew` and `gradle-wrapper.jar` if they are not present.
 
-### 2. (Optional) Configure Firebase for cloud sync
+### 2. Run the app
+- Connect an Android device or start an emulator (API 24+).
+- In Android Studio: Run ▶.
 
-> Skip this entirely if you just want to use the app — local accounts need zero setup.
-1. Go to <https://console.firebase.google.com/> and **Add Project**.
+**The app works with zero setup.** Local accounts (email + password, stored securely on-device) and “Continue with Google” both appear on the login screen; email/password works out of the box.
+
+### 3. (Optional) Firebase — cloud sync + Google Sign-In
+
+The repo already contains a real `app/google-services.json` (Firebase client identifiers only — they are not secrets; access is guarded by `firestore.rules` / `storage.rules`). To switch it to YOUR own Firebase project:
+
+1. Go to <https://console.firebase.google.com/> and **Add Project** (or use the existing `epsilon-studyinfo` project).
 2. Add an **Android app** with package name `com.studyinfo.app`.
 3. Download `google-services.json` and place it at `app/google-services.json`.
 4. In **Authentication → Sign-in method**, enable:
@@ -123,15 +130,24 @@ Android Studio will offer to "Sync Project with Gradle Files". Accept — this g
    ```
    (Requires the Firebase CLI: `npm i -g firebase-tools`.)
 
-### 2. Run the app
-- Connect an Android device or start an emulator (API 24+).
-- In Android Studio: Run ▶.
+#### Enabling “Continue with Google” (one-time, per Firebase project)
 
-**Firebase is now optional.** The app ships with local accounts — sign up works immediately with no cloud configuration. To ALSO enable cloud sync later:
+Google Sign-In only works after the **SHA-1 fingerprint** of the APK's signing key is registered in Firebase:
 
-1. Follow steps 1–7 above to create and wire a Firebase project.
-2. Replace the placeholder `app/google-services.json` with your real one.
-3. Existing local users are migrated transparently on their next login.
+1. **Debug builds (CI + local)** are all signed with the shared keystore committed at `keystores/prepvault-debug.keystore` (password `android`). Its fingerprints are:
+
+   - SHA-1: `D6:1A:90:7C:C9:00:21:A5:5F:1D:A7:49:F3:71:CC:97:8F:2E:20:BB`
+   - SHA-256: `AE:4E:89:74:19:D5:45:00:35:A4:F5:6A:91:C4:25:E2:55:C8:5E:47:1A:49:EC:88:AD:2D:87:2B:5A:EB:75:E8`
+
+   Verify yourself with:
+   ```bash
+   keytool -list -v -keystore keystores/prepvault-debug.keystore -alias androiddebugkey -storepass android
+   ```
+2. In Firebase Console → **Project settings → Your apps → com.studyinfo.app → Add fingerprint**, paste the SHA-1 (add the SHA-256 too).
+3. In **Authentication → Sign-in method**, make sure **Google** is **Enabled**.
+4. **Re-download** `google-services.json` (it now contains the OAuth client entries) and replace `app/google-services.json` in the repo.
+
+Until steps 2–4 are done, the Google button shows a friendly explanation instead of the account picker — email/password sign-in is unaffected.
 
 ---
 
@@ -156,18 +172,20 @@ When the run finishes:
 The workflow:
 1. Checks out the repo.
 2. Sets up JDK 17.
-3. Sets up Android SDK + Build Tools 34.
-4. Sets up Gradle 8.9.
-5. Restores `app/google-services.json` from the `GOOGLE_SERVICES_JSON` secret (see below).
+3. Sets up Android SDK + Build Tools 35.
+4. Sets up Gradle 8.11.1 (with built-in dependency caching).
+5. Restores `app/google-services.json` from the `GOOGLE_SERVICES_JSON` secret if set (otherwise uses the committed one).
 6. Runs `gradle test` (unit tests).
 7. Runs `gradle assembleDebug` (or `assembleRelease`).
 8. Uploads the APK as a build artifact (retained 30 days).
 
+All debug APKs — CI or local — are signed with the **shared committed debug keystore** (`keystores/prepvault-debug.keystore`), so a new APK always installs cleanly over a previous one.
+
 ---
 
-## Firebase GitHub Secrets
+## Firebase GitHub Secrets (optional)
 
-`google-services.json` contains your Firebase API keys and is **not** committed (it's in `.gitignore`). To make CI builds use your real Firebase config:
+`app/google-services.json` **is committed** — it only contains client-side identifiers, which Firebase considers public (real access control lives in `firestore.rules` / `storage.rules`). If you still prefer to keep your config out of the repo, set the `GOOGLE_SERVICES_JSON` secret and it will **override** the committed file at CI time:
 
 1. Locally, base64-encode the file:
    ```bash
@@ -178,13 +196,11 @@ The workflow:
 4. Value: the contents of `/tmp/gs.b64` (paste the whole thing).
 5. Save.
 
-If the secret is not set, the workflow substitutes a placeholder `google-services.json` so the build still succeeds — the Firebase APIs will simply not be reachable at runtime.
-
 **Never commit:**
-- `google-services.json`
 - Firebase Admin SDK service-account JSON
-- Android signing keystores
-- Signing passwords
+- Release signing keystores / passwords
+
+(The shared *debug* keystore is intentionally committed — debug keystores are not secrets.)
 
 ---
 
@@ -283,6 +299,7 @@ Tests cover:
 - Streak computation (current / longest)
 - Backup export JSON shape
 - Subject / QuestionSource / Difficulty enum round-trips
+- Google sign-in: new-account creation, deterministic ids, and linking to an existing email/password account
 
 Tests run on every GitHub Actions build. See `app/src/test/java/com/studyinfo/app/`.
 

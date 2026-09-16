@@ -3,6 +3,8 @@ package com.studyinfo.app.data.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.studyinfo.app.data.database.converter.Converters
 import com.studyinfo.app.data.database.dao.*
 import com.studyinfo.app.data.database.entity.*
@@ -31,7 +33,7 @@ import com.studyinfo.app.data.database.entity.*
         StreakActivityEntity::class,
         SyncQueueEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -53,5 +55,19 @@ abstract class PrepVaultDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "prepvault.db"
+
+        /**
+         * v2 -> v3 (v1.2.0): local_accounts gained `provider` and `photoUrl` so the same
+         * account record can also be reached through "Continue with Google".
+         * Existing rows keep their data — they simply default to the PASSWORD provider.
+         */
+        val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE local_accounts ADD COLUMN provider TEXT NOT NULL DEFAULT 'PASSWORD'",
+                )
+                db.execSQL("ALTER TABLE local_accounts ADD COLUMN photoUrl TEXT")
+            }
+        }
     }
 }

@@ -24,14 +24,25 @@ android {
         applicationId = "com.studyinfo.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
 
     signingConfigs {
+        // SHARED debug keystore, committed on purpose:
+        //  - every CI/local build is signed identically, so new APKs install over old ones
+        //    (no more "App not installed" signature mismatches between CI runners), and
+        //  - its SHA-1 can be registered ONCE in Firebase for Google Sign-In.
+        // Debug keystores are not secrets (standard password "android").
+        getByName("debug") {
+            storeFile = rootProject.file("keystores/prepvault-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("release") {
             // CI signing is wired through env vars (no secrets in repo).
             // Locally, populate secrets.properties OR pass -PsigningKeystore=...
@@ -153,7 +164,11 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-crashlytics")
-    implementation("com.google.android.gms:play-services-auth:21.2.0")
+
+    // --- Credential Manager (modern "Continue with Google") ---
+    implementation("androidx.credentials:credentials:1.6.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
 
     // --- Accompanist (system UI / permissions) ---
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.34.0")

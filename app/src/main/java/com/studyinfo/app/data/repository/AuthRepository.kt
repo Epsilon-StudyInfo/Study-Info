@@ -1,9 +1,11 @@
 package com.studyinfo.app.data.repository
 
+import com.studyinfo.app.data.auth.GoogleAuth
 import com.studyinfo.app.data.auth.PasswordHasher
 import com.studyinfo.app.data.auth.SessionManager
 import com.studyinfo.app.data.database.dao.LocalAccountDao
 import com.studyinfo.app.data.database.dao.UserProfileDao
+import com.studyinfo.app.data.database.entity.AccountProvider
 import com.studyinfo.app.data.database.entity.LocalAccountEntity
 import com.studyinfo.app.data.database.entity.UserProfileEntity
 import com.studyinfo.app.data.firebase.FirebaseAuthDataSource
@@ -13,6 +15,7 @@ import com.studyinfo.app.utils.newId
 import com.studyinfo.app.utils.nowEpoch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import java.util.Date
 
 /**
@@ -68,7 +71,9 @@ class AuthRepository(
         if (password.length < 6) return AppResult.failure("Password must be at least 6 characters.")
 
         if (localAccounts.findByEmail(normalizedEmail) != null) {
-            return AppResult.failure("An account with this email already exists. Try logging in instead.")
+            return AppResult.failure(
+                "An account with this email already exists. Try logging in instead.",
+            )
         }
 
         val account = LocalAccountEntity(
@@ -98,6 +103,11 @@ class AuthRepository(
 
         val local = localAccounts.findByEmail(normalizedEmail)
         if (local != null) {
+            if (local.provider == AccountProvider.GOOGLE) {
+                return AppResult.failure(
+                    "This email is signed up with Google. Please use “Continue with Google”.",
+                )
+            }
             if (!PasswordHasher.verify(password, local.passwordHash)) {
                 return AppResult.failure("Incorrect email or password.")
             }
@@ -131,6 +141,55 @@ class AuthRepository(
         return AppResult.failure("No account found with this email. Create one first.")
     }
 
+    // ---------------------------------------------------------------- google
+
+    /**
+     * "Continue with Google" — local-first, same philosophy as [register]/[login]:
+     *
+     *  - If a local account already exists for the Google email (registered earlier with a
+     *    password), it is LINKED to Google: same id, same data, no duplicate account.
+     *  - Otherwise a new local account is created with a deterministic id derived from the
+     *    Google account id, so the same Google user maps to the same data owner everywhere.
+     *  - The Google ID token is best-effort mirrored to Firebase Auth (when configured) so
+     *    cloud sync works; being offline never blocks sign-in.
+     */
+    suspend fun signInWithGoogle(profile: GoogleAuth.GoogleProfile): AppResult<LocalAccountEntity> {
+        val email = profile.email.trim().lowercase()
+        if (email.isEmpty()) return AppResult.failure("Google did not return an email address.")
+
+        val existing = localAccounts.findByEmail(email)
+        val account = if (existing != null) {
+            // Link the existing account (keep id + data), refresh provider + avatar.
+            localAccounts.updateProvider(existing.id, AccountProvider.GOOGLE, profile.photoUrl)
+            existing.copy(provider = AccountProvider.GOOGLE, photoUrl = profile.photoUrl)
+        } else {
+            val created = LocalAccountEntity(
+                id = GoogleAuth.localAccountIdFor(profile.id),
+                name = profile.displayName.ifBlank { email.substringBefore("@") },
+                email = email,
+                passwordHash = "",   // no password login for Google accounts
+                provider = AccountProvider.GOOGLE,
+                photoUrl = profile.photoUrl,
+                createdAt = Date(nowEpoch()),
+                lastLoginAt = Date(nowEpoch()),
+            )
+            val inserted = runCatching { localAccounts.insert(created) }.isSuccess
+            if (!inserted) {
+                // Extremely unlikely: unique email collided between writes.
+                return AppResult.failure("Could not sign you in. Please try again.")
+            }
+            created
+        }
+
+        localAccounts.touchLogin(account.id, nowEpoch())
+
+        // Best-effort mirror to Firebase (enables cloud sync when it is configured).
+        runCatching { firebaseAuth?.signInWithGoogleCredential(profile.idToken) }
+
+        activateAccount(account)
+        return AppResult.success(account)
+    }
+
     // ---------------------------------------------------------------- session
 
     private suspend fun activateAccount(account: LocalAccountEntity) {
@@ -145,6 +204,15 @@ class AuthRepository(
     fun signOut() {
         runCatching { firebaseAuth?.signOut() }
         session.endSession()
+    }
+
+    /** Sign-out that also resets the Credential Manager state (Google account picker). */
+    fun signOut(context: android.content.Context) {
+        // Fire-and-forget: Credential Manager reset runs off the main thread.
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            GoogleAuth.clearCredentialState(context)
+        }
+        signOut()
     }
 
     // ---------------------------------------------------------------- account
@@ -183,6 +251,11 @@ class AuthRepository(
             ?: return AppResult.failure("Not signed in.")
         val account = localAccounts.findById(id)
             ?: return AppResult.failure("Account not found.")
+        if (account.provider == AccountProvider.GOOGLE) {
+            return AppResult.failure(
+                "This account signs in with Google — there is no password to change.",
+            )
+        }
         if (!PasswordHasher.verify(oldPassword, account.passwordHash)) {
             return AppResult.failure("Current password is incorrect.")
         }
@@ -229,7 +302,7 @@ class AuthRepository(
                 uid = account.id,
                 displayName = account.name,
                 email = account.email,
-                photoUrl = existing?.photoUrl,
+                photoUrl = account.photoUrl ?: existing?.photoUrl,
                 emailVerified = isEmailVerified(),
                 targetExam = existing?.targetExam ?: "JEE Main",
                 preferredLanguage = existing?.preferredLanguage ?: "English",

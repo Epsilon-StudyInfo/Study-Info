@@ -33,6 +33,9 @@ interface LocalAccountDao {
     @Query("UPDATE local_accounts SET passwordHash = :hash WHERE id = :id")
     suspend fun updatePassword(id: String, hash: String)
 
+    @Query("UPDATE local_accounts SET provider = :provider, photoUrl = :photoUrl WHERE id = :id")
+    suspend fun updateProvider(id: String, provider: String, photoUrl: String?)
+
     @Query("DELETE FROM local_accounts WHERE id = :id")
     suspend fun delete(id: String)
 

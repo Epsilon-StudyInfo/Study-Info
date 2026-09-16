@@ -29,49 +29,49 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      # v5+ of these actions run on Node 24, which clears the
+      # "Node.js 20 is deprecated" annotations.
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
-          accept-android-licenses: true
+          # Correct input name (the old `accept-android-licenses` is invalid → warning).
+          accept-android-sdk-licenses: true
           packages: 'platforms;android-35 build-tools;35.0.0'
 
+      # setup-gradle caches ~/.gradle itself (gradle-home, dependencies, transforms…).
+      # The old extra actions/cache step was redundant — it only produced duplicate
+      # cache entries (and extra failure noise during GitHub cache outages), so it's gone.
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.11.1'
+          cache-read-only: false
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            .gradle
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Restore google-services.json
+      - name: Restore google-services.json (secret override)
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
+          # The repo ships a real app/google-services.json (client identifiers only).
+          # If the GOOGLE_SERVICES_JSON secret is set, it takes precedence.
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
             echo "$GOOGLE_SERVICES_JSON" | base64 -d > app/google-services.json
-            echo "google-services.json restored from secret."
+            echo "google-services.json restored from secret (overrides committed file)."
           else
-            echo "::warning::GOOGLE_SERVICES_JSON secret is not set. The build will run but Firebase features will be disabled at runtime."
-            if [ ! -f app/google-services.json ]; then
-              echo '{"project_info":{"project_number":"","project_id":"placeholder","storage_bucket":"placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000000000","android_client_info":{"package_name":"com.studyinfo.app"}},"oauth_client":[],"api_key":[{"current_key":"AIzaSyBogusKeyForBuildOnly0000000000000"}],"services":{"appinvite_service":{"other_platform_oauth_client":[]}}}],"configuration_version":"1"}' > app/google-services.json
-            fi
+            echo "Using committed app/google-services.json."
+          fi
+          # Safety net for forks that strip the file.
+          if [ ! -f app/google-services.json ]; then
+            echo '::warning::No google-services.json found — writing a placeholder. Firebase features will be disabled at runtime.'
+            echo '{"project_info":{"project_number":"","project_id":"placeholder","storage_bucket":"placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000000000","android_client_info":{"package_name":"com.studyinfo.app"}},"oauth_client":[],"api_key":[{"current_key":"AIzaSyBogusKeyForBuildOnly0000000000000"}],"services":{"appinvite_service":{"other_platform_oauth_client":[]}}}],"configuration_version":"1"}' > app/google-services.json
           fi
 
       - name: Run unit tests
@@ -90,7 +90,7 @@ jobs:
           fi
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: PrepVault-APK-${{ github.event.inputs.build_type || 'debug' }}-${{ github.run_number }}
           path: |
@@ -101,7 +101,7 @@ jobs:
 
       - name: Upload test results on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ github.run_number }}
           path: |

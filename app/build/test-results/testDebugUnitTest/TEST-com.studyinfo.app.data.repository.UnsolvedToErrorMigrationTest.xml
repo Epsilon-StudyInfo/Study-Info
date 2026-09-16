@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.studyinfo.app.data.repository.UnsolvedToErrorMigrationTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-16T09:31:33" hostname="c-6aaa49a6-14f3c1c7-5506ffe56349" time="0.371">
-  <properties/>
-  <testcase name="moveToErrorBook returns null when unsolved entry is missing" classname="com.studyinfo.app.data.repository.UnsolvedToErrorMigrationTest" time="0.365"/>
-  <testcase name="moveToErrorBook copies source metadata into a new ErrorEntryEntity and marks original SOLVED" classname="com.studyinfo.app.data.repository.UnsolvedToErrorMigrationTest" time="0.006"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>
