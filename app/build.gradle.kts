@@ -51,8 +51,9 @@ android {
         debug {
             isMinifyEnabled = false
             isDebuggable = true
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
+            // Note: do NOT add applicationIdSuffix = ".debug" — the google-services.json
+            // is registered only for com.studyinfo.app and the google-services plugin fails
+            // to find a matching client if we change the applicationId.
         }
         release {
             isMinifyEnabled = false   // keep build green; enable later once proguard rules are tuned
