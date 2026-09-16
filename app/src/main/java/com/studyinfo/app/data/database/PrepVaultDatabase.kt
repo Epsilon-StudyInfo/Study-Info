@@ -31,7 +31,7 @@ import com.studyinfo.app.data.database.entity.*
         SyncQueueEntity::class,
     ],
     version = 1,
-    exportSchema = true,
+    exportSchema = false,
 )
 @TypeConverters(Converters::class)
 abstract class PrepVaultDatabase : RoomDatabase() {

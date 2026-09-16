@@ -51,4 +51,5 @@ object FirestorePaths {
             }
         }
         try { db.collection(USERS).document(uid).delete().await() } catch (_: Exception) {}
+    }
 }
