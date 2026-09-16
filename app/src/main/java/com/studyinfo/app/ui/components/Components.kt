@@ -152,8 +152,8 @@ fun EmptyStateCard(
 fun ChipRow(
     items: List<String>,
     modifier: Modifier = Modifier,
-    containerColor: (String) -> androidx.compose.ui.graphics.Color = { MaterialTheme.colorScheme.surfaceVariant },
-    labelColor: (String) -> androidx.compose.ui.graphics.Color = { MaterialTheme.colorScheme.onSurfaceVariant },
+    containerColor: @Composable (String) -> androidx.compose.ui.graphics.Color = { MaterialTheme.colorScheme.surfaceVariant },
+    labelColor: @Composable (String) -> androidx.compose.ui.graphics.Color = { MaterialTheme.colorScheme.onSurfaceVariant },
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),

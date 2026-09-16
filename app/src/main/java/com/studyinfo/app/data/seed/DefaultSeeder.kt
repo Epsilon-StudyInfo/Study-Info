@@ -20,7 +20,7 @@ import java.util.Date
  */
 object DefaultSeeder {
 
-    fun seedChapters(dao: ChapterDao) {
+    suspend fun seedChapters(dao: ChapterDao) {
         val now = Date(nowEpoch())
         val rows = mutableListOf<ChapterEntity>()
 

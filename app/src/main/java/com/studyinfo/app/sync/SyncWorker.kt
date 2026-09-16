@@ -5,6 +5,7 @@ import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -29,40 +30,47 @@ class SyncWorker(
 
     override suspend fun doWork(): Result {
         val sl = ServiceLocator
-        if (!sl::authRepository.isInitialized) return Result.success()
+        // The ServiceLocator's properties are lateinit; if init() wasn't called yet (which
+        // should not happen because the App class calls it in onCreate), bail out gracefully.
+        if (!sl.isInitialised()) return Result.success()
         if (sl.authRepository.currentUid == null) return Result.success()
 
-        var totalPushed = 0
-        var totalPulled = 0
         var hasFailure = false
 
-        suspend fun <T> runStep(name: String, push: suspend () -> Int, pull: suspend () -> Int) {
-            try {
-                totalPushed += push()
-                totalPulled += pull()
-            } catch (e: Exception) {
-                hasFailure = true
-            }
+        fun runStep(name: String, push: suspend () -> Int, pull: suspend () -> Int) {
+            // Each step runs sequentially inside this worker; we deliberately don't launch
+            // new coroutines because the worker itself is already a coroutine scope.
         }
 
-        runStep("tags", sl.tagRepository::pushPending, sl.tagRepository::pullAll)
-        runStep("customSources", sl.customSourceRepository::pushPending, sl.customSourceRepository::pullAll)
-        runStep("chapters", sl.chapterRepository::pushPending, sl.chapterRepository::pullAll)
-        runStep("errors", sl.errorRepository::pushPending, sl.errorRepository::pullAll)
-        runStep("unsolved", sl.unsolvedRepository::pushPending, sl.unsolvedRepository::pullAll)
-        runStep("tasks", sl.taskRepository::pushPending, sl.taskRepository::pullAll)
-        runStep("progress", sl.progressRepository::pushPending, sl.progressRepository::pullAll)
-        runStep("reviews", sl.reviewRepository::pushPending, sl.reviewRepository::pullAll)
-        runStep("questionImages", sl.questionImageRepository::pushPending, sl.questionImageRepository::pullAll)
-        runStep("streak", sl.taskRepository::pushStreakPending, sl.taskRepository::pullStreakAll)
+        // Push and pull each entity type
+        try { sl.tagRepository.pushPending() } catch (_: Exception) { hasFailure = true }
+        try { sl.tagRepository.pullAll() } catch (_: Exception) { hasFailure = true }
+        try { sl.customSourceRepository.pushPending() } catch (_: Exception) { hasFailure = true }
+        try { sl.customSourceRepository.pullAll() } catch (_: Exception) { hasFailure = true }
+        try { sl.chapterRepository.pushPending() } catch (_: Exception) { hasFailure = true }
+        try { sl.chapterRepository.pullAll() } catch (_: Exception) { hasFailure = true }
+        try { sl.errorRepository.pushPending() } catch (_: Exception) { hasFailure = true }
+        try { sl.errorRepository.pullAll() } catch (_: Exception) { hasFailure = true }
+        try { sl.unsolvedRepository.pushPending() } catch (_: Exception) { hasFailure = true }
+        try { sl.unsolvedRepository.pullAll() } catch (_: Exception) { hasFailure = true }
+        try { sl.taskRepository.pushPending() } catch (_: Exception) { hasFailure = true }
+        try { sl.taskRepository.pullAll() } catch (_: Exception) { hasFailure = true }
+        try { sl.progressRepository.pushPending() } catch (_: Exception) { hasFailure = true }
+        try { sl.progressRepository.pullAll() } catch (_: Exception) { hasFailure = true }
+        try { sl.reviewRepository.pushPending() } catch (_: Exception) { hasFailure = true }
+        try { sl.reviewRepository.pullAll() } catch (_: Exception) { hasFailure = true }
+        try { sl.questionImageRepository.pushPending() } catch (_: Exception) { hasFailure = true }
+        try { sl.questionImageRepository.pullAll() } catch (_: Exception) { hasFailure = true }
+        try { sl.taskRepository.pushStreakPending() } catch (_: Exception) { hasFailure = true }
+        try { sl.taskRepository.pullStreakAll() } catch (_: Exception) { hasFailure = true }
 
         // Process image upload queue (needs Storage, not just Firestore)
         try {
-            val queue = sl.db().syncQueueDao().pending(limit = 20)
+            val queue = sl.database().syncQueueDao().pending(limit = 20)
             for (item in queue) {
                 sl.questionImageRepository.processQueuedUpload(item)
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             hasFailure = true
         }
 
@@ -94,7 +102,7 @@ class SyncWorker(
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
-            val request = androidx.work.OneTimeWorkRequestBuilder<SyncWorker>()
+            val request = OneTimeWorkRequestBuilder<SyncWorker>()
                 .setConstraints(constraints)
                 .addTag(ONE_TIME_TAG)
                 .build()

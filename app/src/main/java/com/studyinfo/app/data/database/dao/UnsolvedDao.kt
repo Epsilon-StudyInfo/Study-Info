@@ -60,6 +60,9 @@ interface UnsolvedDao {
     @Query("DELETE FROM unsolved WHERE id = :id")
     suspend fun delete(id: String)
 
+    @Query("DELETE FROM unsolved WHERE id = :id")
+    suspend fun hardDelete(id: String)
+
     @Query("DELETE FROM unsolved")
     suspend fun clear()
 }

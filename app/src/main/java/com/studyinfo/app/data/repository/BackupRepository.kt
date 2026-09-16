@@ -84,55 +84,53 @@ class BackupRepository(
         AppResult.failure("Export failed: ${e.message}", e)
     }
 
-    suspend fun importFromJson(json: String): AppResult<ImportSummary> = try {
-        @Suppress("UNCHECKED_CAST")
-        val payload = adapter.fromJson(json) ?: return AppResult.failure("Empty backup file")
-        val schemaVersion = (payload["schemaVersion"] as? Long) ?: 1L
-        if (schemaVersion > 1) {
-            return AppResult.failure("Unsupported schema version $schemaVersion. Please update the app.")
+    suspend fun importFromJson(json: String): AppResult<ImportSummary> {
+        return try {
+            @Suppress("UNCHECKED_CAST")
+            val payload = adapter.fromJson(json) ?: return AppResult.failure("Empty backup file")
+            val schemaVersion = (payload["schemaVersion"] as? Long) ?: 1L
+            if (schemaVersion > 1) {
+                return AppResult.failure("Unsupported schema version $schemaVersion. Please update the app.")
+            }
+
+            val summary = ImportSummary()
+
+            // We don't clear() first — merge by id (upsert). This is documented behaviour.
+            // Tags
+            payload["tags"]?.asEntityList { map ->
+                TagEntity(
+                    id = map["id"] as? String ?: return@asEntityList null,
+                    name = map["name"] as? String ?: "",
+                    color = map["color"] as? String,
+                    createdAt = (map["createdAt"] as? Number)?.toLong()?.let { Date(it) } ?: Date(),
+                    updatedAt = (map["updatedAt"] as? Number)?.toLong()?.let { Date(it) } ?: Date(),
+                    syncState = com.studyinfo.app.domain.model.SyncState.PENDING_CREATE,
+                )
+            }?.let { tagDao.upsertAll(it); summary.tags = it.size }
+
+            // CustomSources
+            payload["customSources"]?.asEntityList { map ->
+                CustomSourceEntity(
+                    id = map["id"] as? String ?: return@asEntityList null,
+                    name = map["name"] as? String ?: "",
+                    description = map["description"] as? String,
+                    createdAt = (map["createdAt"] as? Number)?.toLong()?.let { Date(it) } ?: Date(),
+                    updatedAt = (map["updatedAt"] as? Number)?.toLong()?.let { Date(it) } ?: Date(),
+                    syncState = com.studyinfo.app.domain.model.SyncState.PENDING_CREATE,
+                )
+            }?.let { customSourceDao.upsertAll(it); summary.customSources = it.size }
+
+            AppResult.success(summary)
+        } catch (e: Exception) {
+            AppResult.failure("Import failed: ${e.message}", e)
         }
-
-        val summary = ImportSummary()
-
-        // We don't clear() first — merge by id (upsert). This is documented behaviour.
-        // Tags
-        payload["tags"]?.asEntityList { map ->
-            TagEntity(
-                id = map["id"] as? String ?: return@asEntityList null,
-                name = map["name"] as? String ?: "",
-                color = map["color"] as? String,
-                createdAt = (map["createdAt"] as? Number)?.toLong()?.let { Date(it) } ?: Date(),
-                updatedAt = (map["updatedAt"] as? Number)?.toLong()?.let { Date(it) } ?: Date(),
-                syncState = SyncState.PENDING_CREATE,
-            )
-        }?.let { tagDao.upsertAll(it); summary.tags = it.size }
-
-        // CustomSources
-        payload["customSources"]?.asEntityList { map ->
-            CustomSourceEntity(
-                id = map["id"] as? String ?: return@asEntityList null,
-                name = map["name"] as? String ?: "",
-                description = map["description"] as? String,
-                createdAt = (map["createdAt"] as? Number)?.toLong()?.let { Date(it) } ?: Date(),
-                updatedAt = (map["updatedAt"] as? Number)?.toLong()?.let { Date(it) } ?: Date(),
-                syncState = SyncState.PENDING_CREATE,
-            )
-        }?.let { customSourceDao.upsertAll(it); summary.customSources = it.size }
-
-        // Tasks (simplified import - drop enum-coerced fields that would fail type-safe conversion)
-        // For the MVP we only import "easy" tables that don't have enum converters via JSON
-        // (entities with enums require careful key mapping; we'd want Moshi code-gen).
-        // Errors / unsolved / progress / reviews use enums and would need a proper adapter
-        // — covered by tests in the BackupImportExportTest.
-
-        AppResult.success(summary)
-    } catch (e: Exception) {
-        AppResult.failure("Import failed: ${e.message}", e)
     }
 
     // ---------- Helpers ----------
-    private suspend fun <T> kotlinx.coroutines.flow.Flow<List<T>>.firstOrEmpty(): List<T> =
-        first().ifEmpty { emptyList() }
+    private suspend fun <T> kotlinx.coroutines.flow.Flow<List<T>>.firstOrEmpty(): List<T> {
+        val value = first()
+        return value.ifEmpty { emptyList() }
+    }
 
 
     @Suppress("UNCHECKED_CAST")

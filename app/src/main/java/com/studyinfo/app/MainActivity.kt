@@ -8,9 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.lifecycleScope
 import com.studyinfo.app.sync.SyncWorker
 import com.studyinfo.app.ui.PrepVaultRoot
@@ -21,9 +19,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val transparent = android.graphics.Color.TRANSPARENT
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.auto(Color.Transparent, Color.Transparent),
-            navigationBarStyle = SystemBarStyle.auto(Color.Transparent, Color.Transparent),
+            statusBarStyle = SystemBarStyle.auto(transparent, transparent),
+            navigationBarStyle = SystemBarStyle.auto(transparent, transparent),
         )
         setContent {
             PrepVaultTheme {

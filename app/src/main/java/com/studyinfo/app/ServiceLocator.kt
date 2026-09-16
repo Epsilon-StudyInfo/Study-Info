@@ -142,5 +142,8 @@ object ServiceLocator {
         }
     }
 
-    fun db(): PrepVaultDatabase = db
+    fun database(): PrepVaultDatabase = db
+
+    /** Returns true if [init] has been called (so all repositories are populated). */
+    fun isInitialised(): Boolean = initialised
 }

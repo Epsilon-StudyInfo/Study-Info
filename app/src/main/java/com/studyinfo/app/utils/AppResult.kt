@@ -17,6 +17,12 @@ sealed class AppResult<out T> {
         is Success -> value
         is Failure -> throw cause ?: IllegalStateException(message)
     }
+
+    companion object {
+        fun <T> success(value: T): AppResult<T> = Success(value)
+        fun failure(message: String, cause: Throwable? = null): AppResult<Nothing> =
+            Failure(message, cause)
+    }
 }
 
 inline fun <T, R> AppResult<T>.fold(
@@ -28,6 +34,3 @@ inline fun <T, R> AppResult<T>.fold(
 }
 
 fun <T> AppResult<T>.successOrNull(): T? = (this as? AppResult.Success)?.value
-
-fun <T> success(value: T): AppResult<T> = AppResult.Success(value)
-fun failure(message: String, cause: Throwable? = null): AppResult<Nothing> = AppResult.Failure(message, cause)

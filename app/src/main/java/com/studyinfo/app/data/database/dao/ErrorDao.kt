@@ -64,6 +64,10 @@ interface ErrorDao {
     @Query("DELETE FROM errors WHERE id = :id")
     suspend fun delete(id: String)
 
+    /** Immediate hard delete (no sync-state flip). Used by SyncManager after a remote delete succeeds. */
+    @Query("DELETE FROM errors WHERE id = :id")
+    suspend fun hardDelete(id: String)
+
     @Query("DELETE FROM errors")
     suspend fun clear()
 }

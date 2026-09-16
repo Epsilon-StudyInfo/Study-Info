@@ -16,7 +16,7 @@ import java.util.Date
  * The mapper/serializer pair is supplied per entity so adding a new synced entity
  * is a one-file operation in the data layer.
  */
-class FirestoreCollectionDataSource<T>(
+open class FirestoreCollectionDataSource<T>(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val uidProvider: () -> String?,
     private val collectionName: String,

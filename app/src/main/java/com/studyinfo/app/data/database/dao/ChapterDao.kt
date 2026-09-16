@@ -41,6 +41,9 @@ interface ChapterDao {
 
 @Dao
 interface TopicDao {
+    @Query("SELECT * FROM topics ORDER BY displayOrder ASC, name ASC")
+    fun observeAll(): Flow<List<TopicEntity>>
+
     @Query("SELECT * FROM topics WHERE chapterId = :chapterId ORDER BY displayOrder ASC, name ASC")
     fun observeByChapter(chapterId: String): Flow<List<TopicEntity>>
 
