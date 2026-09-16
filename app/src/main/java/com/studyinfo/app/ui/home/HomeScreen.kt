@@ -123,7 +123,7 @@ fun HomeScreen(
                     ProgressBar(percent = ui.physicsPercent, label = "Physics")
                     ProgressBar(percent = ui.chemistryPercent, label = "Chemistry")
                     ProgressBar(percent = ui.mathematicsPercent, label = "Mathematics")
-                    Divider()
+                    HorizontalDivider()
                     ProgressBar(percent = ui.jeeMainPercent, label = "JEE Main")
                     ProgressBar(percent = ui.jeeAdvancedPercent, label = "JEE Advanced")
                 }

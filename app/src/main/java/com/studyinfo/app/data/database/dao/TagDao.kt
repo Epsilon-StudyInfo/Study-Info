@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TagDao {
-    @Query("SELECT * FROM tags ORDER BY name ASC")
+    @Query("SELECT * FROM tags WHERE syncState != 'PENDING_DELETE' ORDER BY name ASC")
     fun observeAll(): Flow<List<TagEntity>>
 
     @Query("SELECT * FROM tags WHERE id = :id")

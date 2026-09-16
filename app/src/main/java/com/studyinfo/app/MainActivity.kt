@@ -9,11 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.lifecycleScope
 import com.studyinfo.app.sync.SyncWorker
 import com.studyinfo.app.ui.PrepVaultRoot
 import com.studyinfo.app.ui.theme.PrepVaultTheme
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -35,9 +33,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Kick off a one-time sync after the UI is up.
-        lifecycleScope.launch {
-            SyncWorker.enqueueOneTime(this@MainActivity)
-        }
+        // Kick off a one-time sync after the UI is up. enqueueUniqueWork(REPLACE) means
+        // rotations / re-creations never stack duplicate jobs.
+        runCatching { SyncWorker.enqueueOneTime(this) }
     }
 }

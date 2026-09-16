@@ -74,6 +74,10 @@ fun SubjectProgressScreen(
     val subject = Subject.fromName(subjectName)
     LaunchedEffect(subjectName) { vm.load(subject) }
     val ui by vm.ui.collectAsStateWithLifecycle()
+
+    // JEE Main vs JEE Advanced tab — progress is tracked per exam type.
+    val selectedExam = ui.selectedExam
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -89,9 +93,23 @@ fun SubjectProgressScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            item {
+                TabRow(selectedTabIndex = ExamType.entries.indexOf(selectedExam)) {
+                    ExamType.entries.forEach { exam ->
+                        Tab(
+                            selected = exam == selectedExam,
+                            onClick = { vm.selectExam(exam) },
+                            text = { Text(exam.label) },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
             items(ui.chapters, key = { it.id }) { chapter ->
+                // Key the slider on (chapter, exam) AND seed it again when saved progress
+                // arrives asynchronously — otherwise it stays stuck at 0 forever.
                 val progress = ui.progressByChapter[chapter.id]
-                var sliderValue by remember(chapter.id) {
+                var sliderValue by remember(chapter.id, selectedExam, progress?.percent) {
                     mutableStateOf(progress?.percent?.toFloat() ?: 0f)
                 }
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
@@ -103,7 +121,7 @@ fun SubjectProgressScreen(
                                 value = sliderValue,
                                 onValueChange = { sliderValue = it },
                                 onValueChangeFinished = {
-                                    vm.setPercent(chapter.id, subject, ExamType.JEE_MAIN, sliderValue.toInt())
+                                    vm.setPercent(chapter.id, subject, selectedExam, sliderValue.toInt())
                                 },
                                 modifier = Modifier.weight(1f),
                             )

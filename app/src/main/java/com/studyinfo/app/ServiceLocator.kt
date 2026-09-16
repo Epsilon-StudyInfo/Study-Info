@@ -2,9 +2,11 @@ package com.studyinfo.app
 
 import android.content.Context
 import androidx.room.Room
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
+import com.studyinfo.app.data.auth.SessionManager
 import com.studyinfo.app.data.database.PrepVaultDatabase
 import com.studyinfo.app.data.firebase.*
 import com.studyinfo.app.data.repository.*
@@ -22,6 +24,8 @@ object ServiceLocator {
 
     @Volatile private var initialised = false
     private lateinit var db: PrepVaultDatabase
+    lateinit var sessionManager: SessionManager
+        private set
 
     lateinit var authRepository: AuthRepository
         private set
@@ -46,11 +50,19 @@ object ServiceLocator {
     lateinit var backupRepository: BackupRepository
         private set
 
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
-    private val storage: FirebaseStorage = FirebaseStorage.getInstance()
+    // Firebase singletons. With a placeholder google-services.json these construct fine and
+    // simply fail on network calls (caught downstream); if construction itself ever throws
+    // (no config), we degrade to local-only mode instead of crashing on launch.
+    // FirebaseInitProvider (merged from the google-services plugin) auto-initialises
+    // FirebaseApp from resources before the Application runs, so getInstance() is safe here.
+    private val firebaseAuthInstance: FirebaseAuth? =
+        runCatching { FirebaseAuth.getInstance() }.getOrNull()
+    private val firestoreInstance: FirebaseFirestore? =
+        runCatching { FirebaseFirestore.getInstance() }.getOrNull()
+    private val storageInstance: FirebaseStorage? =
+        runCatching { FirebaseStorage.getInstance() }.getOrNull()
 
-    private fun uidProvider(): () -> String? = { auth.currentUser?.uid }
+    private fun uidProvider(): () -> String? = { firebaseAuthInstance?.currentUser?.uid }
 
     fun init(context: Context) {
         if (initialised) return
@@ -64,51 +76,67 @@ object ServiceLocator {
                 .fallbackToDestructiveMigration()
                 .build()
 
-            val authDs = FirebaseAuthDataSource(auth, firestore)
-            authRepository = AuthRepository(authDs, db.userProfileDao())
+            sessionManager = SessionManager(context.applicationContext)
+
+            val authDs = if (firebaseAuthInstance != null && firestoreInstance != null) {
+                FirebaseAuthDataSource(firebaseAuthInstance, firestoreInstance)
+            } else null
+
+            authRepository = AuthRepository(
+                firebaseAuth = authDs,
+                localAccounts = db.localAccountDao(),
+                userProfileDao = db.userProfileDao(),
+                session = sessionManager,
+                onSwitchDataOwner = { wipeUserData() },
+            )
+
+            val streakRecorder = StreakRecorder(db.streakDao())
 
             tagRepository = TagRepository(
                 db.tagDao(),
-                FirestoreTagsDataSource(firestore, uidProvider()),
+                firestoreInstance?.let { FirestoreTagsDataSource(it, uidProvider()) },
             )
             customSourceRepository = CustomSourceRepository(
                 db.customSourceDao(),
-                FirestoreCustomSourcesDataSource(firestore, uidProvider()),
+                firestoreInstance?.let { FirestoreCustomSourcesDataSource(it, uidProvider()) },
             )
             chapterRepository = ChapterRepository(
                 db.chapterDao(),
                 db.topicDao(),
-                FirestoreChaptersDataSource(firestore, uidProvider()),
-                FirestoreTopicsDataSource(firestore, uidProvider()),
+                firestoreInstance?.let { FirestoreChaptersDataSource(it, uidProvider()) },
+                firestoreInstance?.let { FirestoreTopicsDataSource(it, uidProvider()) },
             )
             errorRepository = ErrorRepository(
                 db.errorDao(),
-                FirestoreErrorsDataSource(firestore, uidProvider()),
+                firestoreInstance?.let { FirestoreErrorsDataSource(it, uidProvider()) },
+                streakRecorder,
             )
             unsolvedRepository = UnsolvedRepository(
                 db.unsolvedDao(),
-                FirestoreUnsolvedDataSource(firestore, uidProvider()),
-                FirestoreErrorsDataSource(firestore, uidProvider()),
+                firestoreInstance?.let { FirestoreUnsolvedDataSource(it, uidProvider()) },
+                firestoreInstance?.let { FirestoreErrorsDataSource(it, uidProvider()) },
                 db.errorDao(),
+                streakRecorder,
             )
             taskRepository = TaskRepository(
                 db.taskDao(),
-                FirestoreTasksDataSource(firestore, uidProvider()),
+                firestoreInstance?.let { FirestoreTasksDataSource(it, uidProvider()) },
                 db.streakDao(),
-                FirestoreStreakDataSource(firestore, uidProvider()),
+                firestoreInstance?.let { FirestoreStreakDataSource(it, uidProvider()) },
+                streakRecorder,
             )
             progressRepository = ProgressRepository(
                 db.progressDao(),
-                FirestoreProgressDataSource(firestore, uidProvider()),
+                firestoreInstance?.let { FirestoreProgressDataSource(it, uidProvider()) },
             )
             reviewRepository = ReviewRepository(
                 db.reviewDao(),
-                FirestoreReviewsDataSource(firestore, uidProvider()),
+                firestoreInstance?.let { FirestoreReviewsDataSource(it, uidProvider()) },
             )
             questionImageRepository = QuestionImageRepository(
                 db.questionImageDao(),
-                FirestoreQuestionImagesDataSource(firestore, uidProvider()),
-                FirebaseStorageDataSource(storage, uidProvider()),
+                firestoreInstance?.let { FirestoreQuestionImagesDataSource(it, uidProvider()) },
+                storageInstance?.let { FirebaseStorageDataSource(it, uidProvider()) },
                 db.syncQueueDao(),
             )
             backupRepository = BackupRepository(
@@ -128,6 +156,25 @@ object ServiceLocator {
 
             initialised = true
         }
+    }
+
+    /**
+     * Wipes all USER-GENERATED data (keeps accounts, and the chapter reference table which
+     * is re-seeded anyway). Called when a different account signs in so data never leaks
+     * across accounts on a shared device.
+     */
+    suspend fun wipeUserData() {
+        db.userProfileDao().clear()
+        db.tagDao().clear()
+        db.customSourceDao().clear()
+        db.questionImageDao().clear()
+        db.errorDao().clear()
+        db.unsolvedDao().clear()
+        db.taskDao().clear()
+        db.reviewDao().clear()
+        db.progressDao().clear()
+        db.streakDao().clear()
+        db.syncQueueDao().clear()
     }
 
     /**

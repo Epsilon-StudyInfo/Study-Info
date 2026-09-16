@@ -1,0 +1,34 @@
+[
+    {
+        "merged": "com.studyinfo.app-release-78:/drawable_ic_launcher.xml.flat",
+        "source": "com.studyinfo.app-main-79:/drawable/ic_launcher.xml"
+    },
+    {
+        "merged": "com.studyinfo.app-release-78:/drawable_ic_launcher_background.xml.flat",
+        "source": "com.studyinfo.app-main-79:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "com.studyinfo.app-release-78:/drawable_ic_brand_logo.xml.flat",
+        "source": "com.studyinfo.app-main-79:/drawable/ic_brand_logo.xml"
+    },
+    {
+        "merged": "com.studyinfo.app-release-78:/drawable_ic_launcher_round.xml.flat",
+        "source": "com.studyinfo.app-main-79:/drawable/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.studyinfo.app-release-78:/xml_file_paths.xml.flat",
+        "source": "com.studyinfo.app-main-79:/xml/file_paths.xml"
+    },
+    {
+        "merged": "com.studyinfo.app-release-78:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.studyinfo.app-main-79:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.studyinfo.app-release-78:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.studyinfo.app-main-79:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.studyinfo.app-release-78:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.studyinfo.app-main-79:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    }
+]

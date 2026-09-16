@@ -9,16 +9,16 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ProgressDao {
-    @Query("SELECT * FROM progress ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM progress WHERE syncState != 'PENDING_DELETE' ORDER BY updatedAt DESC")
     fun observeAll(): Flow<List<ProgressEntity>>
 
-    @Query("SELECT * FROM progress WHERE subject = :subject ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM progress WHERE syncState != 'PENDING_DELETE' AND subject = :subject ORDER BY updatedAt DESC")
     fun observeBySubject(subject: Subject): Flow<List<ProgressEntity>>
 
-    @Query("SELECT * FROM progress WHERE examType = :examType ORDER BY subject, updatedAt DESC")
+    @Query("SELECT * FROM progress WHERE syncState != 'PENDING_DELETE' AND examType = :examType ORDER BY subject, updatedAt DESC")
     fun observeByExam(examType: ExamType): Flow<List<ProgressEntity>>
 
-    @Query("SELECT * FROM progress WHERE chapterId = :chapterId")
+    @Query("SELECT * FROM progress WHERE syncState != 'PENDING_DELETE' AND chapterId = :chapterId")
     suspend fun getByChapter(chapterId: String): ProgressEntity?
 
     @Query("SELECT * FROM progress WHERE subject = :subject AND examType = :examType LIMIT 1")

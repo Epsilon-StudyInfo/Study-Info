@@ -1,15 +1,19 @@
 package com.studyinfo.app.ui.todo
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -17,8 +21,10 @@ import androidx.navigation.NavHostController
 import com.studyinfo.app.domain.model.Subject
 import com.studyinfo.app.domain.model.TaskPriority
 import com.studyinfo.app.ui.errors.DropdownField
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 
 @Composable
 fun TaskEditScreen(
@@ -36,7 +42,7 @@ fun TaskEditScreen(
                 title = { Text(if (taskId == null) "Add Task" else "Edit Task") },
                 navigationIcon = {
                     IconButton(onClick = { nav.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -89,24 +95,69 @@ fun TaskEditScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            // Due date pickers (simple)
-            val duePicker = remember { mutableStateOf(ui.dueDate) }
-            val cal = remember { Calendar.getInstance().apply { time = duePicker.value } }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Due date: real date picker + quick-shift buttons, always driven by ui.dueDate
+            // so an async-loaded task never shows/saves the wrong date.
+            var showDatePicker by remember { mutableStateOf(false) }
+            val dateFormat = remember { SimpleDateFormat("EEE, MMM d, yyyy", Locale.US) }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
-                    value = "${cal.get(Calendar.YEAR)}-${(cal.get(Calendar.MONTH) + 1).toString().padStart(2, '0')}-${cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')}",
+                    value = dateFormat.format(ui.dueDate),
                     onValueChange = {},
                     readOnly = true,
+                    enabled = false,
                     label = { Text("Due date") },
-                    modifier = Modifier.weight(1f),
-                )
-                Button(
-                    onClick = {
-                        cal.add(Calendar.DAY_OF_MONTH, 1)
-                        vm.update { it.copy(dueDate = Date(cal.timeInMillis)) }
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { showDatePicker = true },
+                    colors = TextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledLabelColor = MaterialTheme.colorScheme.primary,
+                        disabledContainerColor = Color.Transparent,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                    trailingIcon = {
+                        Icon(Icons.Filled.CalendarMonth, contentDescription = "Pick date")
                     },
-                    modifier = Modifier.weight(0.4f),
-                ) { Text("+1d") }
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("+1d" to 1, "+3d" to 3, "+7d" to 7).forEach { (label, days) ->
+                    OutlinedButton(
+                        onClick = {
+                            val cal = Calendar.getInstance().apply {
+                                time = ui.dueDate
+                                add(Calendar.DAY_OF_MONTH, days)
+                            }
+                            vm.update { it.copy(dueDate = cal.time) }
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(label) }
+                }
+            }
+            if (showDatePicker) {
+                val pickerState = rememberDatePickerState(initialSelectedDateMillis = ui.dueDate.time)
+                DatePickerDialog(
+                    onDismissRequest = { showDatePicker = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showDatePicker = false
+                            val selected = pickerState.selectedDateMillis ?: return@TextButton
+                            // Normalise the picker's UTC midnight to LOCAL midnight.
+                            val cal = Calendar.getInstance().apply {
+                                timeInMillis = selected
+                                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+                                set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                            }
+                            vm.update { it.copy(dueDate = cal.time) }
+                        }) { Text("OK") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                    },
+                ) {
+                    DatePicker(state = pickerState)
+                }
             }
             OutlinedTextField(
                 value = ui.estimatedMinutes,

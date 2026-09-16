@@ -157,7 +157,11 @@ class UnsolvedEditViewModel : ViewModel() {
             )
             if (s.id == null) ServiceLocator.unsolvedRepository.add(entity)
             else {
-                val existing = ServiceLocator.unsolvedRepository.getById(s.id)!!
+                val existing = ServiceLocator.unsolvedRepository.getById(s.id)
+                if (existing == null) {
+                    _ui.value = _ui.value.copy(saving = false, error = "This entry no longer exists.")
+                    return@launch
+                }
                 ServiceLocator.unsolvedRepository.update(entity.copy(
                     addedAt = existing.addedAt,
                     retryCount = existing.retryCount,
@@ -174,6 +178,7 @@ class UnsolvedEditViewModel : ViewModel() {
 
 data class UnsolvedDetailUiState(
     val entry: UnsolvedQuestionEntity? = null,
+    val loaded: Boolean = false,
     val moveToErrorLoading: Boolean = false,
     val movedToErrorId: String? = null,
 )
@@ -182,8 +187,17 @@ class UnsolvedDetailViewModel : ViewModel() {
     private val _ui = MutableStateFlow(UnsolvedDetailUiState())
     val ui: StateFlow<UnsolvedDetailUiState> = _ui.asStateFlow()
 
+    private var observedId: String? = null
+
+    /** Observes the row live: favorite toggles, status changes and edits refresh instantly. */
     fun load(id: String) {
-        viewModelScope.launch { _ui.value = _ui.value.copy(entry = ServiceLocator.unsolvedRepository.getById(id)) }
+        if (observedId == id) return
+        observedId = id
+        viewModelScope.launch {
+            ServiceLocator.unsolvedRepository.observeById(id).collect { entry ->
+                _ui.value = _ui.value.copy(entry = entry, loaded = true)
+            }
+        }
     }
     fun toggleFavorite() {
         val e = _ui.value.entry ?: return

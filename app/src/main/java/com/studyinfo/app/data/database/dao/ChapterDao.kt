@@ -8,10 +8,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ChapterDao {
-    @Query("SELECT * FROM chapters ORDER BY displayOrder ASC, name ASC")
+    @Query("SELECT * FROM chapters WHERE syncState != 'PENDING_DELETE' ORDER BY displayOrder ASC, name ASC")
     fun observeAll(): Flow<List<ChapterEntity>>
 
-    @Query("SELECT * FROM chapters WHERE subject = :subject ORDER BY displayOrder ASC, chapterNumber ASC")
+    @Query("SELECT * FROM chapters WHERE syncState != 'PENDING_DELETE' AND subject = :subject ORDER BY displayOrder ASC, chapterNumber ASC")
     fun observeBySubject(subject: String): Flow<List<ChapterEntity>>
 
     @Query("SELECT * FROM chapters WHERE id = :id")
@@ -41,14 +41,17 @@ interface ChapterDao {
 
 @Dao
 interface TopicDao {
-    @Query("SELECT * FROM topics ORDER BY displayOrder ASC, name ASC")
+    @Query("SELECT * FROM topics WHERE syncState != 'PENDING_DELETE' ORDER BY displayOrder ASC, name ASC")
     fun observeAll(): Flow<List<TopicEntity>>
 
-    @Query("SELECT * FROM topics WHERE chapterId = :chapterId ORDER BY displayOrder ASC, name ASC")
+    @Query("SELECT * FROM topics WHERE syncState != 'PENDING_DELETE' AND chapterId = :chapterId ORDER BY displayOrder ASC, name ASC")
     fun observeByChapter(chapterId: String): Flow<List<TopicEntity>>
 
     @Query("SELECT * FROM topics WHERE id = :id")
     suspend fun getById(id: String): TopicEntity?
+
+    @Query("SELECT * FROM topics")
+    suspend fun getAll(): List<TopicEntity>
 
     @Query("SELECT * FROM topics WHERE syncState != :synced")
     suspend fun pendingChanges(synced: SyncState = SyncState.SYNCED): List<TopicEntity>

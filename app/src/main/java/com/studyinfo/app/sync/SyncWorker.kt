@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -15,13 +16,13 @@ import java.util.concurrent.TimeUnit
 /**
  * Periodically pushes pending local changes to Firestore and pulls remote changes.
  *
+ * Cloud sync only runs when a FIREBASE-backed user is signed in. Local-only accounts
+ * (the default when no Firebase project is configured) never hit the network — the app
+ * is fully offline-first.
+ *
  * Triggers:
  *   - Periodic schedule (every 15 minutes when network is available)
- *   - Manual via [enqueueOneTime]
- *
- * The worker reads every repository's `pendingChanges()` list, writes each item to
- * Firestore, marks the row SYNCED on success, and on failure leaves the row pending
- * (the next run will retry).
+ *   - Manual via [enqueueOneTime] (wired to Settings -> "Sync now")
  */
 class SyncWorker(
     appContext: Context,
@@ -33,16 +34,11 @@ class SyncWorker(
         // The ServiceLocator's properties are lateinit; if init() wasn't called yet (which
         // should not happen because the App class calls it in onCreate), bail out gracefully.
         if (!sl.isInitialised()) return Result.success()
-        if (sl.authRepository.currentUid == null) return Result.success()
+        // Only run cloud sync for Firebase-backed sessions; local-only accounts are offline.
+        if (sl.authRepository.firebaseUid == null) return Result.success()
 
         var hasFailure = false
 
-        fun runStep(name: String, push: suspend () -> Int, pull: suspend () -> Int) {
-            // Each step runs sequentially inside this worker; we deliberately don't launch
-            // new coroutines because the worker itself is already a coroutine scope.
-        }
-
-        // Push and pull each entity type
         try { sl.tagRepository.pushPending() } catch (_: Exception) { hasFailure = true }
         try { sl.tagRepository.pullAll() } catch (_: Exception) { hasFailure = true }
         try { sl.customSourceRepository.pushPending() } catch (_: Exception) { hasFailure = true }
@@ -107,7 +103,12 @@ class SyncWorker(
                 .addTag(ONE_TIME_TAG)
                 .build()
 
-            WorkManager.getInstance(context).enqueue(request)
+            // REPLACE so repeated taps don't stack duplicate sync jobs.
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                ONE_TIME_TAG,
+                ExistingWorkPolicy.REPLACE,
+                request,
+            )
         }
 
         fun cancelAll(context: Context) {

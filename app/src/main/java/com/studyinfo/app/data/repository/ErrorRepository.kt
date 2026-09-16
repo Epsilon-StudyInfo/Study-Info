@@ -19,7 +19,8 @@ import java.util.Date
  */
 class ErrorRepository(
     private val dao: ErrorDao,
-    private val remote: FirestoreErrorsDataSource,
+    private val remote: FirestoreErrorsDataSource?,
+    private val streakRecorder: StreakRecorder? = null,
 ) {
 
     // ---------- Observers ----------
@@ -50,6 +51,7 @@ class ErrorRepository(
             syncState = SyncState.PENDING_CREATE,
         )
         dao.upsert(withMeta)
+        runCatching { streakRecorder?.record() }
         return withMeta
     }
 
@@ -115,9 +117,9 @@ class ErrorRepository(
         for (entry in pending) {
             when (entry.syncState) {
                 SyncState.PENDING_CREATE, SyncState.PENDING_UPDATE ->
-                    if (remote.put(entry.id, entry)) { dao.markSync(entry.id); count++ }
+                    if (remote?.put(entry.id, entry) == true) { dao.markSync(entry.id); count++ }
                 SyncState.PENDING_DELETE ->
-                    if (remote.delete(entry.id)) { dao.hardDelete(id = entry.id); count++ }
+                    if (remote?.delete(entry.id) == true) { dao.hardDelete(id = entry.id); count++ }
                 else -> {}
             }
         }
@@ -125,7 +127,7 @@ class ErrorRepository(
     }
 
     suspend fun pullAll(): Int {
-        val remoteList = remote.fetchAll()
+        val remoteList = remote?.fetchAll() ?: emptyList()
         if (remoteList.isNotEmpty()) dao.upsertAll(remoteList)
         return remoteList.size
     }

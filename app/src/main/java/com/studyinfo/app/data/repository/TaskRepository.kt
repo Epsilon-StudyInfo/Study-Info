@@ -20,9 +20,10 @@ import java.util.TimeZone
 
 class TaskRepository(
     private val dao: TaskDao,
-    private val remote: FirestoreTasksDataSource,
+    private val remote: FirestoreTasksDataSource?,
     private val streakDao: StreakDao,
-    private val streakRemote: FirestoreStreakDataSource,
+    private val streakRemote: FirestoreStreakDataSource?,
+    private val streakRecorder: StreakRecorder? = null,
 ) {
 
     fun observeAll(): Flow<List<TaskEntity>> = dao.observeAll()
@@ -73,7 +74,7 @@ class TaskRepository(
         val completedAt = if (status == TaskStatus.COMPLETED) nowEpoch() else null
         dao.setStatus(id, status, completedAt, nowEpoch())
         if (status == TaskStatus.COMPLETED) {
-            recordStreakActivity()
+            runCatching { streakRecorder?.record() }
             val task = dao.getById(id) ?: return
             // Auto-create next recurrence if needed
             task.recurrence?.let { recurrence ->
@@ -106,9 +107,9 @@ class TaskRepository(
         for (task in pending) {
             when (task.syncState) {
                 SyncState.PENDING_CREATE, SyncState.PENDING_UPDATE ->
-                    if (remote.put(task.id, task)) { dao.markSync(task.id); count++ }
+                    if (remote?.put(task.id, task) == true) { dao.markSync(task.id); count++ }
                 SyncState.PENDING_DELETE ->
-                    if (remote.delete(task.id)) { dao.hardDelete(task.id); count++ }
+                    if (remote?.delete(task.id) == true) { dao.hardDelete(task.id); count++ }
                 else -> {}
             }
         }
@@ -116,7 +117,7 @@ class TaskRepository(
     }
 
     suspend fun pullAll(): Int {
-        val remoteList = remote.fetchAll()
+        val remoteList = remote?.fetchAll() ?: emptyList()
         if (remoteList.isNotEmpty()) dao.upsertAll(remoteList)
         return remoteList.size
     }
@@ -124,16 +125,6 @@ class TaskRepository(
     suspend fun clear() = dao.clear()
 
     // ---------- Streak ----------
-    private suspend fun recordStreakActivity() {
-        val dateKey = todayKey()
-        val existing = streakDao.getByDate(dateKey)
-        val now = Date(nowEpoch())
-        if (existing == null) {
-            streakDao.upsert(StreakActivityEntity(dateKey, activityCount = 1, lastActivityAt = now, updatedAt = now, syncState = SyncState.PENDING_CREATE))
-        } else {
-            streakDao.upsert(existing.copy(activityCount = existing.activityCount + 1, lastActivityAt = now, updatedAt = now, syncState = SyncState.PENDING_UPDATE))
-        }
-    }
 
     /**
      * Compute the current and longest streaks based on activity rows.
@@ -174,21 +165,18 @@ class TaskRepository(
     }
 
     suspend fun pushStreakPending(): Int {
-        val pending = streakDao.observeAll()
-        // Flow - we just take a snapshot via activeDays + ... actually let's enumerate.
-        // We need a list; use a small workaround - read the recent list.
         val recent = streakDao.recent(365)
         var count = 0
         for (item in recent) {
             if (item.syncState != SyncState.SYNCED) {
-                if (streakRemote.put(item.dateKey, item)) { streakDao.markSync(item.dateKey); count++ }
+                if (streakRemote?.put(item.dateKey, item) == true) { streakDao.markSync(item.dateKey); count++ }
             }
         }
         return count
     }
 
     suspend fun pullStreakAll(): Int {
-        val remoteList = streakRemote.fetchAll()
+        val remoteList = streakRemote?.fetchAll() ?: emptyList()
         for (item in remoteList) streakDao.upsert(item)
         return remoteList.size
     }

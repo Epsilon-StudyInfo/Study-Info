@@ -2,8 +2,6 @@ package com.studyinfo.app
 
 import android.app.Application
 import androidx.work.Configuration
-import com.google.firebase.FirebaseApp
-import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.studyinfo.app.sync.SyncWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,10 +10,9 @@ import kotlinx.coroutines.launch
 
 /**
  * Application class. Sets up:
- *   - Manual DI container ([ServiceLocator])
+ *   - Manual DI container ([ServiceLocator]) — including safe, optional Firebase init
  *   - Default JEE chapter seed (only on first launch)
- *   - WorkManager periodic sync
- *   - Crashlytics opt-in (no PII collected — see privacy section in README)
+ *   - WorkManager periodic sync (cloud sync only active for Firebase-backed accounts)
  */
 class PrepVaultApp : Application(), Configuration.Provider {
 
@@ -28,10 +25,16 @@ class PrepVaultApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        FirebaseApp.initializeApp(this)
 
-        // Crashlytics: collect crashes only (no question content / notes / solutions).
-        FirebaseCrashlytics.getInstance().isCrashlyticsCollectionEnabled = true
+        // Firebase is optional: with a placeholder google-services.json (or none at all)
+        // the app still runs fully in local-only mode. Never crash on Firebase setup.
+        runCatching {
+            com.google.firebase.FirebaseApp.initializeApp(this)
+            runCatching {
+                com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance()
+                    .isCrashlyticsCollectionEnabled = true
+            }
+        }
 
         ServiceLocator.init(this)
 
@@ -39,6 +42,6 @@ class PrepVaultApp : Application(), Configuration.Provider {
             try { ServiceLocator.seedIfEmpty(this@PrepVaultApp) } catch (_: Throwable) {}
         }
 
-        SyncWorker.schedulePeriodic(this)
+        runCatching { SyncWorker.schedulePeriodic(this) }
     }
 }

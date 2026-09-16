@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CustomSourceDao {
-    @Query("SELECT * FROM custom_sources ORDER BY name ASC")
+    @Query("SELECT * FROM custom_sources WHERE syncState != 'PENDING_DELETE' ORDER BY name ASC")
     fun observeAll(): Flow<List<CustomSourceEntity>>
 
     @Query("SELECT * FROM custom_sources WHERE id = :id")

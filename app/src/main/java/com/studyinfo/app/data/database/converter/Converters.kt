@@ -7,7 +7,10 @@ import java.util.Date
 /**
  * Centralised Room type converters.
  *
- * Enums are stored as their name (string). Dates are stored as epoch millis.
+ * Enums are stored as their name (string) and MUST be parsed back with [Enum.fromName].
+ * Parsing by display label corrupted most enum fields on every round-trip (e.g.
+ * TIME_MANAGEMENT degraded to OTHER, JEE_ADVANCED folded into JEE_MAIN).
+ * Dates are stored as epoch millis.
  */
 class Converters {
     @TypeConverter fun fromDate(value: Date?): Long? = value?.time
@@ -22,43 +25,43 @@ class Converters {
 
     @TypeConverter fun fromDifficulty(value: Difficulty?): String? = value?.name
     @TypeConverter fun toDifficulty(value: String?): Difficulty? =
-        value?.let { Difficulty.fromLabel(it) }
+        value?.let { Difficulty.fromName(it) }
 
     @TypeConverter fun fromMistakeType(value: MistakeType?): String? = value?.name
     @TypeConverter fun toMistakeType(value: String?): MistakeType? =
-        value?.let { MistakeType.fromLabel(it) }
+        value?.let { MistakeType.fromName(it) }
 
     @TypeConverter fun fromErrorStatus(value: ErrorStatus?): String? = value?.name
     @TypeConverter fun toErrorStatus(value: String?): ErrorStatus? =
-        value?.let { ErrorStatus.fromLabel(it) }
+        value?.let { ErrorStatus.fromName(it) }
 
     @TypeConverter fun fromUnsolvedStatus(value: UnsolvedStatus?): String? = value?.name
     @TypeConverter fun toUnsolvedStatus(value: String?): UnsolvedStatus? =
-        value?.let { UnsolvedStatus.fromLabel(it) }
+        value?.let { UnsolvedStatus.fromName(it) }
 
     @TypeConverter fun fromTaskStatus(value: TaskStatus?): String? = value?.name
     @TypeConverter fun toTaskStatus(value: String?): TaskStatus? =
-        value?.let { TaskStatus.fromLabel(it) }
+        value?.let { TaskStatus.fromName(it) }
 
     @TypeConverter fun fromTaskPriority(value: TaskPriority?): String? = value?.name
     @TypeConverter fun toTaskPriority(value: String?): TaskPriority? =
-        value?.let { TaskPriority.fromLabel(it) }
+        value?.let { TaskPriority.fromName(it) }
 
     @TypeConverter fun fromChapterState(value: ChapterState?): String? = value?.name
     @TypeConverter fun toChapterState(value: String?): ChapterState? =
-        value?.let { ChapterState.fromLabel(it) }
+        value?.let { ChapterState.fromName(it) }
 
     @TypeConverter fun fromReviewOutcome(value: ReviewOutcome?): String? = value?.name
     @TypeConverter fun toReviewOutcome(value: String?): ReviewOutcome? =
-        value?.let { ReviewOutcome.fromLabel(it) }
+        value?.let { ReviewOutcome.fromName(it) }
 
     @TypeConverter fun fromExamType(value: ExamType?): String? = value?.name
     @TypeConverter fun toExamType(value: String?): ExamType? =
-        value?.let { ExamType.fromLabel(it) }
+        value?.let { ExamType.fromName(it) }
 
     @TypeConverter fun fromSyncState(value: SyncState?): String? = value?.name
     @TypeConverter fun toSyncState(value: String?): SyncState? =
-        value?.let { SyncState.valueOf(it) }
+        value?.let { SyncState.fromName(it) }
 
     /**
      * String list is stored as a single '\u0001'-delimited string (never appears in user text).

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.studyinfo.app.data.repository.BackupExportTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-16T09:31:26" hostname="c-6aaa49a6-14f3c1c7-5506ffe56349" time="5.702">
+  <properties/>
+  <testcase name="export produces a JSON payload containing all top-level keys" classname="com.studyinfo.app.data.repository.BackupExportTest" time="5.702"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -62,6 +62,29 @@ class RevisionViewModel : ViewModel() {
         }
     }
 
+    /** Reviews one unsolved retry-queue item: understood -> solved, otherwise re-scheduled. */
+    fun recordUnsolved(unsolvedId: String, outcome: ReviewOutcome) {
+        val sessionId = _ui.value.currentSessionId ?: return
+        viewModelScope.launch {
+            when (outcome) {
+                ReviewOutcome.UNDERSTOOD ->
+                    ServiceLocator.unsolvedRepository.setStatus(unsolvedId, UnsolvedStatus.SOLVED)
+                ReviewOutcome.NEEDS_REVISION ->
+                    ServiceLocator.unsolvedRepository.scheduleRetry(unsolvedId, days = 3)
+                ReviewOutcome.STILL_CONFUSED ->
+                    ServiceLocator.unsolvedRepository.scheduleRetry(unsolvedId, days = 1)
+            }
+            ServiceLocator.reviewRepository.record(sessionId, outcome)
+            _ui.value = _ui.value.copy(
+                reviewedCount = _ui.value.reviewedCount + 1,
+                understood = _ui.value.understood + (if (outcome == ReviewOutcome.UNDERSTOOD) 1 else 0),
+                confused = _ui.value.confused + (if (outcome == ReviewOutcome.STILL_CONFUSED) 1 else 0),
+                needsRevision = _ui.value.needsRevision + (if (outcome == ReviewOutcome.NEEDS_REVISION) 1 else 0),
+                dueUnsolved = _ui.value.dueUnsolved.filterNot { it.id == unsolvedId },
+            )
+        }
+    }
+
     fun end() {
         val sessionId = _ui.value.currentSessionId ?: return
         viewModelScope.launch {

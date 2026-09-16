@@ -12,6 +12,9 @@ PrepVault helps you keep an **Error Book** and an **Unsolved Question Book**, pl
 
 ## Features
 
+- **Works out of the box — local accounts** — sign up / log in with email + password stored securely on-device (PBKDF2-hashed). No Firebase setup needed to use the app.
+- **Optional cloud sync** — if you configure a real Firebase project, the same credentials are mirrored to Firebase Auth automatically and Firestore sync turns on.
+
 - **Error Book** — save mistakes by mistake type (conceptual, calculation, silly, formula, misread, time-management, guessing, other); add attempted + correct solution, explanation, lesson learned; spaced-repetition review with 1/3/7/14/30-day schedules.
 - **Unsolved Question Book** — questions you couldn't solve, organised by source:
   - **DPP** (Daily Practice Problem sheets)
@@ -44,7 +47,7 @@ PrepVault helps you keep an **Error Book** and an **Unsolved Question Book**, pl
 | Async | Kotlin Coroutines + Flow |
 | Local DB | Room (with KSP codegen) |
 | Cloud DB | Cloud Firestore |
-| Auth | Firebase Auth (email/password + Google) |
+| Auth | Local accounts (PBKDF2) + optional Firebase Auth |
 | Storage | Firebase Storage |
 | Background sync | WorkManager (periodic + on-demand) |
 | Settings | DataStore Preferences |
@@ -103,7 +106,9 @@ cd Study-Info
 
 Android Studio will offer to "Sync Project with Gradle Files". Accept — this generates the local `gradlew` and `gradle-wrapper.jar` if they are not present.
 
-### 2. Create a Firebase project
+### 2. (Optional) Configure Firebase for cloud sync
+
+> Skip this entirely if you just want to use the app — local accounts need zero setup.
 1. Go to <https://console.firebase.google.com/> and **Add Project**.
 2. Add an **Android app** with package name `com.studyinfo.app`.
 3. Download `google-services.json` and place it at `app/google-services.json`.
@@ -118,9 +123,15 @@ Android Studio will offer to "Sync Project with Gradle Files". Accept — this g
    ```
    (Requires the Firebase CLI: `npm i -g firebase-tools`.)
 
-### 3. Run the app
+### 2. Run the app
 - Connect an Android device or start an emulator (API 24+).
 - In Android Studio: Run ▶.
+
+**Firebase is now optional.** The app ships with local accounts — sign up works immediately with no cloud configuration. To ALSO enable cloud sync later:
+
+1. Follow steps 1–7 above to create and wire a Firebase project.
+2. Replace the placeholder `app/google-services.json` with your real one.
+3. Existing local users are migrated transparently on their next login.
 
 ---
 

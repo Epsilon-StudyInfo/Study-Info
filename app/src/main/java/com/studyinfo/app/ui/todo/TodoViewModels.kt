@@ -131,10 +131,21 @@ class TaskEditViewModel : ViewModel() {
                 recurrence = s.recurrence,
                 notes = s.notes.ifBlank { null },
             )
-            if (s.id == null) ServiceLocator.taskRepository.add(entity)
-            else ServiceLocator.taskRepository.update(entity.copy(
-                createdAt = ServiceLocator.taskRepository.getById(s.id)?.createdAt ?: Date(),
-            ))
+            if (s.id == null) {
+                ServiceLocator.taskRepository.add(entity)
+            } else {
+                val existing = ServiceLocator.taskRepository.getById(s.id)
+                if (existing == null) {
+                    _ui.value = _ui.value.copy(saving = false, error = "This task no longer exists.")
+                    return@launch
+                }
+                // Preserve bookkeeping the edit form doesn't expose (completion history,
+                // creation date) so editing never silently erases them.
+                ServiceLocator.taskRepository.update(entity.copy(
+                    createdAt = existing.createdAt,
+                    completedAt = existing.completedAt,
+                ))
+            }
             _ui.value = _ui.value.copy(saving = false, saved = true)
         }
     }

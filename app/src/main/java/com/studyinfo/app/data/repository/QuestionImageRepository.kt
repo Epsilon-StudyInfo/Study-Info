@@ -26,8 +26,8 @@ import java.util.Date
  */
 class QuestionImageRepository(
     private val dao: QuestionImageDao,
-    private val remote: FirestoreQuestionImagesDataSource,
-    private val storage: FirebaseStorageDataSource,
+    private val remote: FirestoreQuestionImagesDataSource?,
+    private val storage: FirebaseStorageDataSource?,
     private val syncQueueDao: SyncQueueDao,
 ) {
 
@@ -78,6 +78,9 @@ class QuestionImageRepository(
         val localUri = image.localUri ?: return false.also {
             syncQueueDao.recordFailure(item.id, item.attempts + 1, "no local uri", Date(nowEpoch()))
         }
+        // No cloud storage configured (local-only mode): keep the image offline-only and
+        // drop the queue entry instead of retrying forever.
+        val storage = storage ?: return true.also { syncQueueDao.delete(item.id) }
         return try {
             val urlResult = storage.uploadFromUri(
                 questionId = image.questionRefId,
@@ -87,15 +90,15 @@ class QuestionImageRepository(
             val url = urlResult.getOrThrow()
             val updated = image.copy(
                 remoteUrl = url,
-                // Reconstruct path; matches the layout used inside FirebaseStorageDataSource.
-                storagePath = "users/questions/${image.questionRefId}/${image.id}",
+                // Path must match the upload layout exactly: users/{uid}/questions/{qId}/{imageId}.
+                storagePath = storage.pathFor(image.questionRefId, image.id),
                 uploadedAt = Date(nowEpoch()),
                 updatedAt = Date(nowEpoch()),
                 syncState = SyncState.PENDING_UPDATE,
             )
             dao.upsert(updated)
             // Push metadata to Firestore
-            remote.put(updated.id, updated)
+            remote?.put(updated.id, updated)
             dao.markSync(updated.id)
             syncQueueDao.delete(item.id)
             true
@@ -108,9 +111,9 @@ class QuestionImageRepository(
     suspend fun delete(imageId: String) {
         val existing = dao.getById(imageId) ?: return
         // best-effort remote delete
-        existing.remoteUrl?.let { runCatching { storage.deleteByRemoteUrl(it) } }
-        existing.storagePath?.let { runCatching { storage.deleteByPath(it) } }
-        remote.delete(imageId)
+        existing.remoteUrl?.let { runCatching { storage?.deleteByRemoteUrl(it) } }
+        existing.storagePath?.let { runCatching { storage?.deleteByPath(it) } }
+        remote?.delete(imageId)
         dao.delete(imageId)
     }
 
@@ -125,9 +128,9 @@ class QuestionImageRepository(
         for (img in pending) {
             when (img.syncState) {
                 SyncState.PENDING_CREATE, SyncState.PENDING_UPDATE -> {
-                    if (img.remoteUrl != null && remote.put(img.id, img)) { dao.markSync(img.id); count++ }
+                    if (img.remoteUrl != null && remote?.put(img.id, img) == true) { dao.markSync(img.id); count++ }
                 }
-                SyncState.PENDING_DELETE -> { if (remote.delete(img.id)) { dao.delete(img.id); count++ } }
+                SyncState.PENDING_DELETE -> { if (remote?.delete(img.id) == true) { dao.delete(img.id); count++ } }
                 else -> {}
             }
         }
@@ -135,7 +138,7 @@ class QuestionImageRepository(
     }
 
     suspend fun pullAll(): Int {
-        val remoteList = remote.fetchAll()
+        val remoteList = remote?.fetchAll() ?: emptyList()
         if (remoteList.isNotEmpty()) dao.upsertAll(remoteList)
         return remoteList.size
     }

@@ -60,9 +60,10 @@ fun RevisionScreen(
             }
             return@Scaffold
         }
-        // Active session: show the next error to review
-        val current = ui.dueErrors.firstOrNull()
-        if (current == null) {
+        // Active session: errors first, then the unsolved retry queue
+        val currentError = ui.dueErrors.firstOrNull()
+        val currentUnsolved = if (currentError == null) ui.dueUnsolved.firstOrNull() else null
+        if (currentError == null && currentUnsolved == null) {
             Column(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("All caught up!", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                 Text("You reviewed ${ui.reviewedCount} items this session.", style = MaterialTheme.typography.bodyMedium)
@@ -80,31 +81,64 @@ fun RevisionScreen(
             item {
                 Text("Reviewed so far: ${ui.reviewedCount}", style = MaterialTheme.typography.labelMedium)
             }
-            item {
-                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("${current.subject.displayName} · ${current.mistakeType.label}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        Text(current.title.ifBlank { current.questionText.take(80) }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        if (!current.questionText.isBlank()) {
-                            Text(current.questionText, style = MaterialTheme.typography.bodyMedium)
-                        }
-                        if (!current.correctSolution.isNullOrBlank()) {
-                            Text("Solution", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                            Text(current.correctSolution, style = MaterialTheme.typography.bodyMedium)
+            if (currentError != null) {
+                val current = currentError
+                item {
+                    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("ERROR · ${current.subject.displayName} · ${current.mistakeType.label}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Text(current.title.ifBlank { current.questionText.take(80) }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            if (!current.questionText.isBlank()) {
+                                Text(current.questionText, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            if (!current.correctSolution.isNullOrBlank()) {
+                                Text("Solution", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                Text(current.correctSolution, style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
                 }
-            }
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Button(onClick = { vm.recordError(current.id, ReviewOutcome.UNDERSTOOD) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                        Text("Understood")
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(onClick = { vm.recordError(current.id, ReviewOutcome.UNDERSTOOD) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                            Text("Understood")
+                        }
+                        FilledTonalButton(onClick = { vm.recordError(current.id, ReviewOutcome.NEEDS_REVISION) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                            Text("Needs Revision")
+                        }
+                        OutlinedButton(onClick = { vm.recordError(current.id, ReviewOutcome.STILL_CONFUSED) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                            Text("Still Confused")
+                        }
                     }
-                    FilledTonalButton(onClick = { vm.recordError(current.id, ReviewOutcome.NEEDS_REVISION) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                        Text("Needs Revision")
+                }
+            } else {
+                val current = currentUnsolved!!
+                item {
+                    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("UNSOLVED · ${current.subject.displayName} · ${current.source.displayName}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                            Text(current.title.ifBlank { current.questionText.take(80) }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            if (!current.questionText.isBlank()) {
+                                Text(current.questionText, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            if (!current.reasonNotSolved.isNullOrBlank()) {
+                                Text("Why you couldn't solve it", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                Text(current.reasonNotSolved, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
                     }
-                    OutlinedButton(onClick = { vm.recordError(current.id, ReviewOutcome.STILL_CONFUSED) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                        Text("Still Confused")
+                }
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(onClick = { vm.recordUnsolved(current.id, ReviewOutcome.UNDERSTOOD) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                            Text("Solved it now")
+                        }
+                        FilledTonalButton(onClick = { vm.recordUnsolved(current.id, ReviewOutcome.NEEDS_REVISION) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                            Text("Retry in 3 days")
+                        }
+                        OutlinedButton(onClick = { vm.recordUnsolved(current.id, ReviewOutcome.STILL_CONFUSED) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                            Text("Retry tomorrow")
+                        }
                     }
                 }
             }

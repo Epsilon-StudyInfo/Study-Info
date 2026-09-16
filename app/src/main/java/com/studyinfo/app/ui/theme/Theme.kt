@@ -11,8 +11,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Brand palette
-private val Brand = Color(0xFF3B5BDB)
+// Brand palette (aligned with the launcher icon gradient: indigo -> deep violet)
+private val Brand = Color(0xFF4F46E5)
 private val BrandDark = Color(0xFFA5B4FC)
 private val OnBrand = Color(0xFFFFFFFF)
 
@@ -33,8 +33,13 @@ private val DarkOnSurfaceVariant = Color(0xFFB6BBC6)
 val LightColors = lightColorScheme(
     primary = Brand,
     onPrimary = OnBrand,
-    primaryContainer = Color(0xFFE0E6FF),
-    onPrimaryContainer = Color(0xFF00256E),
+    primaryContainer = Color(0xFFE0E7FF),
+    onPrimaryContainer = Color(0xFF1E1B4B),
+    secondary = Color(0xFF0E7490),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFCFFAFE),
+    onSecondaryContainer = Color(0xFF083344),
+    tertiary = Color(0xFF7C3AED),
     background = LightBackground,
     onBackground = LightOnSurface,
     surface = LightSurface,
@@ -48,9 +53,14 @@ val LightColors = lightColorScheme(
 
 val DarkColors = darkColorScheme(
     primary = BrandDark,
-    onPrimary = Color(0xFF00256E),
-    primaryContainer = Color(0xFF1B3FAE),
-    onPrimaryContainer = Color(0xFFE0E6FF),
+    onPrimary = Color(0xFF1E1B4B),
+    primaryContainer = Color(0xFF3730A3),
+    onPrimaryContainer = Color(0xFFE0E7FF),
+    secondary = Color(0xFF67E8F9),
+    onSecondary = Color(0xFF083344),
+    secondaryContainer = Color(0xFF155E75),
+    onSecondaryContainer = Color(0xFFCFFAFE),
+    tertiary = Color(0xFFC4B5FD),
     background = DarkBackground,
     onBackground = DarkOnSurface,
     surface = DarkSurface,

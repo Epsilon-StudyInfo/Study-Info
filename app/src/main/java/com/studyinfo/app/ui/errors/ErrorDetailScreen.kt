@@ -29,15 +29,29 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ErrorDetailViewModel : ViewModel() {
-    private val _ui = MutableStateFlow<ErrorEntryEntity?>(null)
-    val ui: StateFlow<ErrorEntryEntity?> = _ui.asStateFlow()
+data class ErrorDetailUiState(
+    val entry: ErrorEntryEntity? = null,
+    val loaded: Boolean = false,
+)
 
+class ErrorDetailViewModel : ViewModel() {
+    private val _ui = MutableStateFlow(ErrorDetailUiState())
+    val ui: StateFlow<ErrorDetailUiState> = _ui.asStateFlow()
+
+    private var observedId: String? = null
+
+    /** Observes the row live so favorite / status / review updates render instantly. */
     fun load(id: String) {
-        viewModelScope.launch { _ui.value = ServiceLocator.errorRepository.getById(id) }
+        if (observedId == id) return
+        observedId = id
+        viewModelScope.launch {
+            ServiceLocator.errorRepository.observeById(id).collect { entry ->
+                _ui.value = _ui.value.copy(entry = entry, loaded = true)
+            }
+        }
     }
     fun toggleFavorite() {
-        val e = _ui.value ?: return
+        val e = _ui.value.entry ?: return
         viewModelScope.launch { ServiceLocator.errorRepository.setFavorite(e.id, !e.favorite) }
     }
 }
@@ -48,7 +62,8 @@ fun ErrorDetailScreen(
     errorId: String,
     vm: ErrorDetailViewModel = viewModel(),
 ) {
-    val error by vm.ui.collectAsStateWithLifecycle()
+    val uiState by vm.ui.collectAsStateWithLifecycle()
+    val error = uiState.entry
     LaunchedEffect(errorId) { vm.load(errorId) }
 
     Scaffold(
@@ -88,8 +103,16 @@ fun ErrorDetailScreen(
     ) { padding ->
         val e = error
         if (e == null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                if (uiState.loaded) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("This entry no longer exists.", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(onClick = { nav.popBackStack() }) { Text("Go back") }
+                    }
+                } else {
+                    CircularProgressIndicator()
+                }
             }
             return@Scaffold
         }
@@ -109,7 +132,7 @@ fun ErrorDetailScreen(
             InfoLine("Difficulty", e.difficulty.label)
             InfoLine("Mistake Type", e.mistakeType.label)
             InfoLine("Status", e.status.label)
-            Divider()
+            HorizontalDivider()
 
             SectionLabel("Question")
             Text(e.questionText, style = MaterialTheme.typography.bodyLarge)
@@ -135,7 +158,7 @@ fun ErrorDetailScreen(
                 Text(e.personalNotes, style = MaterialTheme.typography.bodyMedium)
             }
 
-            Divider()
+            HorizontalDivider()
             InfoLine("Reviewed", "${e.reviewCount} times")
             if (e.lastReviewedAt != null) {
                 InfoLine("Last reviewed", java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.US).format(e.lastReviewedAt))

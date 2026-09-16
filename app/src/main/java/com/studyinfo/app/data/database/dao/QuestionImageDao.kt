@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface QuestionImageDao {
-    @Query("SELECT * FROM question_images WHERE questionRefType = :refType AND questionRefId = :refId ORDER BY createdAt ASC")
+    @Query("SELECT * FROM question_images WHERE syncState != 'PENDING_DELETE' AND questionRefType = :refType AND questionRefId = :refId ORDER BY createdAt ASC")
     fun observeForQuestion(refType: String, refId: String): Flow<List<QuestionImageEntity>>
 
     @Query("SELECT * FROM question_images WHERE questionRefType = :refType AND questionRefId = :refId")
@@ -18,6 +18,9 @@ interface QuestionImageDao {
 
     @Query("SELECT * FROM question_images WHERE questionRefType = :refType")
     suspend fun getAllForRefType(refType: String): List<QuestionImageEntity>
+
+    @Query("SELECT * FROM question_images")
+    suspend fun getAll(): List<QuestionImageEntity>
 
     @Query("SELECT * FROM question_images WHERE syncState != :synced")
     suspend fun pendingChanges(synced: SyncState = SyncState.SYNCED): List<QuestionImageEntity>

@@ -77,7 +77,15 @@ fun UnsolvedDetailScreen(
     ) { padding ->
         if (entry == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                if (ui.loaded) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("This question no longer exists.", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(onClick = { nav.popBackStack() }) { Text("Go back") }
+                    }
+                } else {
+                    CircularProgressIndicator()
+                }
             }
             return@Scaffold
         }
@@ -95,7 +103,7 @@ fun UnsolvedDetailScreen(
             if (entry.topic != null) InfoLine("Topic", entry.topic)
             if (entry.questionNumber != null) InfoLine("Q No.", entry.questionNumber)
             InfoLine("Difficulty", entry.difficulty.label)
-            Divider()
+            HorizontalDivider()
             Text("Question", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             Text(entry.questionText, style = MaterialTheme.typography.bodyLarge)
             if (!entry.reasonNotSolved.isNullOrBlank()) {

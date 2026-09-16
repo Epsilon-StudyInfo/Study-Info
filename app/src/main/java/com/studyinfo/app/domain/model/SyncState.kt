@@ -14,5 +14,12 @@ enum class SyncState {
     PENDING_UPDATE,
 
     /** Deleted locally, still needs to be deleted on remote. */
-    PENDING_DELETE,
+    PENDING_DELETE;
+
+    companion object {
+        /** Never throws: an unknown persisted value (e.g. from a future schema or an import)
+         *  degrades to SYNCED instead of crashing Room on read. */
+        fun fromName(name: String?): SyncState =
+            entries.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: SYNCED
+    }
 }

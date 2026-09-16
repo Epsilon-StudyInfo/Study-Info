@@ -8,10 +8,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface UnsolvedDao {
-    @Query("SELECT * FROM unsolved ORDER BY addedAt DESC")
+    @Query("SELECT * FROM unsolved WHERE syncState != 'PENDING_DELETE' ORDER BY addedAt DESC")
     fun observeAll(): Flow<List<UnsolvedQuestionEntity>>
 
-    @Query("SELECT * FROM unsolved WHERE source = :source ORDER BY addedAt DESC")
+    @Query("SELECT * FROM unsolved WHERE syncState != 'PENDING_DELETE' AND source = :source ORDER BY addedAt DESC")
     fun observeBySource(source: String): Flow<List<UnsolvedQuestionEntity>>
 
     @Query("SELECT * FROM unsolved WHERE id = :id")
@@ -23,20 +23,20 @@ interface UnsolvedDao {
     @Query("SELECT * FROM unsolved WHERE syncState != :synced")
     suspend fun pendingChanges(synced: SyncState = SyncState.SYNCED): List<UnsolvedQuestionEntity>
 
-    @Query("SELECT * FROM unsolved WHERE status != :skip AND status != :solved AND nextRetryAt IS NOT NULL AND nextRetryAt <= :now ORDER BY nextRetryAt ASC")
+    @Query("SELECT * FROM unsolved WHERE syncState != 'PENDING_DELETE' AND status != :skip AND status != :solved AND nextRetryAt IS NOT NULL AND nextRetryAt <= :now ORDER BY nextRetryAt ASC")
     fun observeRetryQueue(
         now: Long,
         skip: UnsolvedStatus = UnsolvedStatus.SKIP_PERMANENTLY,
         solved: UnsolvedStatus = UnsolvedStatus.SOLVED,
     ): Flow<List<UnsolvedQuestionEntity>>
 
-    @Query("SELECT COUNT(*) FROM unsolved WHERE status = :status")
+    @Query("SELECT COUNT(*) FROM unsolved WHERE syncState != 'PENDING_DELETE' AND status = :status")
     fun observeCountByStatus(status: UnsolvedStatus): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM unsolved WHERE source = :source")
+    @Query("SELECT COUNT(*) FROM unsolved WHERE syncState != 'PENDING_DELETE' AND source = :source")
     fun observeCountBySource(source: String): Flow<Int>
 
-    @Query("SELECT * FROM unsolved WHERE title LIKE '%' || :q || '%' OR questionText LIKE '%' || :q || '%' OR chapterName LIKE '%' || :q || '%' ORDER BY addedAt DESC LIMIT :limit")
+    @Query("SELECT * FROM unsolved WHERE syncState != 'PENDING_DELETE' AND title LIKE '%' || :q || '%' OR questionText LIKE '%' || :q || '%' OR chapterName LIKE '%' || :q || '%' ORDER BY addedAt DESC LIMIT :limit")
     suspend fun search(q: String, limit: Int = 50): List<UnsolvedQuestionEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

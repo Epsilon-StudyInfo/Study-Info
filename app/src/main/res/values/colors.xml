@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Brand -->
-    <color name="brand_seed">#FF3B5BDB</color>
+    <color name="brand_seed">#FF4F46E5</color>
     <color name="brand_seed_dark">#FFA5B4FC</color>
+    <color name="brand_deep">#FF312E81</color>
     <color name="surface_dim">#FFFAFBFF</color>
     <color name="on_surface_variant">#FF44464F</color>
 

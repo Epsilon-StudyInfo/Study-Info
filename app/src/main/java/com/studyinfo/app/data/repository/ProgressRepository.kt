@@ -14,7 +14,7 @@ import java.util.Date
 
 class ProgressRepository(
     private val dao: ProgressDao,
-    private val remote: FirestoreProgressDataSource,
+    private val remote: FirestoreProgressDataSource?,
 ) {
     fun observeAll(): Flow<List<ProgressEntity>> = dao.observeAll()
     fun observeBySubject(subject: Subject): Flow<List<ProgressEntity>> = dao.observeBySubject(subject)
@@ -84,9 +84,9 @@ class ProgressRepository(
         for (entry in pending) {
             when (entry.syncState) {
                 SyncState.PENDING_CREATE, SyncState.PENDING_UPDATE ->
-                    if (remote.put(entry.id, entry)) { dao.markSync(entry.id); count++ }
+                    if (remote?.put(entry.id, entry) == true) { dao.markSync(entry.id); count++ }
                 SyncState.PENDING_DELETE ->
-                    if (remote.delete(entry.id)) { dao.delete(entry.id); count++ }
+                    if (remote?.delete(entry.id) == true) { dao.delete(entry.id); count++ }
                 else -> {}
             }
         }
@@ -94,7 +94,7 @@ class ProgressRepository(
     }
 
     suspend fun pullAll(): Int {
-        val remoteList = remote.fetchAll()
+        val remoteList = remote?.fetchAll() ?: emptyList()
         if (remoteList.isNotEmpty()) dao.upsertAll(remoteList)
         return remoteList.size
     }

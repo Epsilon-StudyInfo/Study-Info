@@ -10,14 +10,24 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.studyinfo.app.ServiceLocator
+import com.studyinfo.app.domain.model.QuestionSource
 import com.studyinfo.app.navigation.Routes
 import com.studyinfo.app.navigation.TOP_LEVEL_DESTINATIONS
 import com.studyinfo.app.ui.about.AboutScreen
-import com.studyinfo.app.ui.auth.*
+import com.studyinfo.app.ui.auth.ForgotPasswordScreen
+import com.studyinfo.app.ui.auth.LoginScreen
+import com.studyinfo.app.ui.auth.RegisterScreen
+import com.studyinfo.app.ui.auth.SplashScreen
 import com.studyinfo.app.ui.backup.BackupScreen
-import com.studyinfo.app.ui.errors.*
+import com.studyinfo.app.ui.errors.ErrorDetailScreen
+import com.studyinfo.app.ui.errors.ErrorEditScreen
+import com.studyinfo.app.ui.errors.ErrorListScreen
+import com.studyinfo.app.ui.errors.ErrorReviewScreen
 import com.studyinfo.app.ui.home.HomeScreen
-import com.studyinfo.app.ui.manage.*
+import com.studyinfo.app.ui.manage.ManageChaptersScreen
+import com.studyinfo.app.ui.manage.ManageSourcesScreen
+import com.studyinfo.app.ui.manage.ManageTagsScreen
 import com.studyinfo.app.ui.more.MoreScreen
 import com.studyinfo.app.ui.progress.ProgressScreen
 import com.studyinfo.app.ui.progress.SubjectProgressScreen
@@ -29,19 +39,18 @@ import com.studyinfo.app.ui.settings.SettingsScreen
 import com.studyinfo.app.ui.statistics.StatisticsScreen
 import com.studyinfo.app.ui.todo.TaskEditScreen
 import com.studyinfo.app.ui.todo.TodoListScreen
-import com.studyinfo.app.ui.unsolved.*
+import com.studyinfo.app.ui.unsolved.RetryQueueScreen
+import com.studyinfo.app.ui.unsolved.UnsolvedDetailScreen
+import com.studyinfo.app.ui.unsolved.UnsolvedEditScreen
+import com.studyinfo.app.ui.unsolved.UnsolvedListScreen
 
 @Composable
 fun PrepVaultRoot() {
     val nav = rememberNavController()
-    val authState = remember { mutableStateOf(com.studyinfo.app.ServiceLocator.authRepository.isSignedIn()) }
 
-    LaunchedEffect(Unit) {
-        // Re-evaluate auth state when this composable first runs.
-        authState.value = com.studyinfo.app.ServiceLocator.authRepository.isSignedIn()
-    }
-
-    val startDestination = if (authState.value) Routes.HOME else Routes.SPLASH
+    // Start at the splash gate: it decides HOME vs LOGIN once and navigates with a clean
+    // back stack. Reading the session synchronously is safe (SharedPreferences-backed).
+    val startDestination = Routes.SPLASH
 
     Scaffold(
         bottomBar = {
@@ -77,11 +86,14 @@ fun PrepVaultRoot() {
             composable(Routes.SPLASH) {
                 SplashScreen()
                 LaunchedEffect(Unit) {
-                    kotlinx.coroutines.delay(600)
-                    if (com.studyinfo.app.ServiceLocator.authRepository.isSignedIn()) {
-                        nav.navigate(Routes.HOME) { popUpTo(Routes.SPLASH) { inclusive = true } }
+                    kotlinx.coroutines.delay(500)
+                    val signedIn = runCatching {
+                        ServiceLocator.authRepository.isSignedIn()
+                    }.getOrDefault(false)
+                    if (signedIn) {
+                        nav.navigate(Routes.HOME) { popUpTo(0) { inclusive = true } }
                     } else {
-                        nav.navigate(Routes.LOGIN) { popUpTo(Routes.SPLASH) { inclusive = true } }
+                        nav.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
                     }
                 }
             }
@@ -125,7 +137,7 @@ fun PrepVaultRoot() {
                 arguments = listOf(navArgument("source") { type = NavType.StringType; nullable = true; defaultValue = "" }),
             ) { entry ->
                 val sourceName = entry.arguments?.getString("source").orEmpty()
-                val source = if (sourceName.isBlank()) null else com.studyinfo.app.domain.model.QuestionSource.fromName(sourceName)
+                val source = if (sourceName.isBlank()) null else QuestionSource.fromName(sourceName)
                 UnsolvedEditScreen(nav, unsolvedId = null, initialSource = source)
             }
             composable(

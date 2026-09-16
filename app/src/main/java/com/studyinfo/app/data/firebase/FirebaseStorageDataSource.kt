@@ -25,6 +25,12 @@ class FirebaseStorageDataSource(
             .child(questionId)
             .child(imageId)
 
+    /** Canonical storage path for an image, e.g. `users/{uid}/questions/{qId}/{imgId}`. */
+    fun pathFor(questionId: String, imageId: String): String? {
+        val uid = uidProvider() ?: return null
+        return "users/$uid/questions/$questionId/$imageId"
+    }
+
     suspend fun uploadFromUri(
         questionId: String,
         imageId: String,

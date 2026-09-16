@@ -16,6 +16,7 @@ import com.studyinfo.app.data.database.entity.*
  */
 @Database(
     entities = [
+        LocalAccountEntity::class,
         UserProfileEntity::class,
         TagEntity::class,
         CustomSourceEntity::class,
@@ -30,11 +31,12 @@ import com.studyinfo.app.data.database.entity.*
         StreakActivityEntity::class,
         SyncQueueEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
 abstract class PrepVaultDatabase : RoomDatabase() {
+    abstract fun localAccountDao(): LocalAccountDao
     abstract fun userProfileDao(): UserProfileDao
     abstract fun tagDao(): TagDao
     abstract fun customSourceDao(): CustomSourceDao

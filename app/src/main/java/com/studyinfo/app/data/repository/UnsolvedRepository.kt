@@ -13,9 +13,10 @@ import java.util.Date
 
 class UnsolvedRepository(
     private val dao: UnsolvedDao,
-    private val remote: FirestoreUnsolvedDataSource,
-    private val errorsRemote: FirestoreErrorsDataSource,
+    private val remote: FirestoreUnsolvedDataSource?,
+    private val errorsRemote: FirestoreErrorsDataSource?,
     private val errorDao: com.studyinfo.app.data.database.dao.ErrorDao,
+    private val streakRecorder: StreakRecorder? = null,
 ) {
 
     // ---------- Observers ----------
@@ -42,6 +43,7 @@ class UnsolvedRepository(
             syncState = SyncState.PENDING_CREATE,
         )
         dao.upsert(withMeta)
+        runCatching { streakRecorder?.record() }
         return withMeta
     }
 
@@ -133,6 +135,7 @@ class UnsolvedRepository(
             lessonLearned = lessonLearned,
             tags = unsolved.tags,
             status = ErrorStatus.ACTIVE,
+            favorite = unsolved.favorite,
             addedAt = now,
             updatedAt = now,
             syncState = SyncState.PENDING_CREATE,
@@ -151,9 +154,9 @@ class UnsolvedRepository(
         for (entry in pending) {
             when (entry.syncState) {
                 SyncState.PENDING_CREATE, SyncState.PENDING_UPDATE ->
-                    if (remote.put(entry.id, entry)) { dao.markSync(entry.id); count++ }
+                    if (remote?.put(entry.id, entry) == true) { dao.markSync(entry.id); count++ }
                 SyncState.PENDING_DELETE ->
-                    if (remote.delete(entry.id)) { dao.hardDelete(entry.id); count++ }
+                    if (remote?.delete(entry.id) == true) { dao.hardDelete(entry.id); count++ }
                 else -> {}
             }
         }
@@ -161,7 +164,7 @@ class UnsolvedRepository(
     }
 
     suspend fun pullAll(): Int {
-        val remoteList = remote.fetchAll()
+        val remoteList = remote?.fetchAll() ?: emptyList()
         if (remoteList.isNotEmpty()) dao.upsertAll(remoteList)
         return remoteList.size
     }

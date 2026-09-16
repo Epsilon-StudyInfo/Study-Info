@@ -11,7 +11,7 @@ import java.util.Date
 
 class CustomSourceRepository(
     private val dao: CustomSourceDao,
-    private val remote: FirestoreCustomSourcesDataSource,
+    private val remote: FirestoreCustomSourcesDataSource?,
 ) {
     fun observeAll(): Flow<List<CustomSourceEntity>> = dao.observeAll()
 
@@ -48,10 +48,10 @@ class CustomSourceRepository(
         for (source in pending) {
             when (source.syncState) {
                 SyncState.PENDING_CREATE, SyncState.PENDING_UPDATE -> {
-                    if (remote.put(source.id, source)) { dao.markSync(source.id); count++ }
+                    if (remote?.put(source.id, source) == true) { dao.markSync(source.id); count++ }
                 }
                 SyncState.PENDING_DELETE -> {
-                    if (remote.delete(source.id)) { dao.delete(source.id); count++ }
+                    if (remote?.delete(source.id) == true) { dao.delete(source.id); count++ }
                 }
                 else -> {}
             }
@@ -60,7 +60,7 @@ class CustomSourceRepository(
     }
 
     suspend fun pullAll(): Int {
-        val remoteList = remote.fetchAll()
+        val remoteList = remote?.fetchAll() ?: emptyList()
         if (remoteList.isNotEmpty()) dao.upsertAll(remoteList)
         return remoteList.size
     }

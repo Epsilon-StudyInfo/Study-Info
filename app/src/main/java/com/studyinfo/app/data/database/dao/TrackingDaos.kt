@@ -12,16 +12,16 @@ import java.util.Date
 
 @Dao
 interface TaskDao {
-    @Query("SELECT * FROM tasks ORDER BY dueDate ASC, priority DESC")
+    @Query("SELECT * FROM tasks WHERE syncState != 'PENDING_DELETE' ORDER BY dueDate ASC, CASE priority WHEN 'URGENT' THEN 4 WHEN 'HIGH' THEN 3 WHEN 'MEDIUM' THEN 2 ELSE 1 END DESC")
     fun observeAll(): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE dueDate BETWEEN :start AND :end ORDER BY dueDate ASC, priority DESC")
+    @Query("SELECT * FROM tasks WHERE syncState != 'PENDING_DELETE' AND dueDate BETWEEN :start AND :end ORDER BY dueDate ASC, CASE priority WHEN 'URGENT' THEN 4 WHEN 'HIGH' THEN 3 WHEN 'MEDIUM' THEN 2 ELSE 1 END DESC")
     fun observeForRange(start: Long, end: Long): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE dueDate < :now AND status != :completed AND status != :skipped ORDER BY dueDate ASC")
+    @Query("SELECT * FROM tasks WHERE syncState != 'PENDING_DELETE' AND dueDate < :now AND status != :completed AND status != :skipped ORDER BY dueDate ASC")
     fun observeOverdue(now: Long, completed: TaskStatus = TaskStatus.COMPLETED, skipped: TaskStatus = TaskStatus.SKIPPED): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE status = :status ORDER BY completedAt DESC")
+    @Query("SELECT * FROM tasks WHERE syncState != 'PENDING_DELETE' AND status = :status ORDER BY completedAt DESC")
     fun observeByStatus(status: TaskStatus): Flow<List<TaskEntity>>
 
     @Query("SELECT * FROM tasks WHERE id = :id")
@@ -30,10 +30,10 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE id = :id")
     suspend fun getById(id: String): TaskEntity?
 
-    @Query("SELECT COUNT(*) FROM tasks WHERE dueDate BETWEEN :start AND :end AND status = :status")
+    @Query("SELECT COUNT(*) FROM tasks WHERE syncState != 'PENDING_DELETE' AND dueDate BETWEEN :start AND :end AND status = :status")
     fun observeCompletedCountForRange(start: Long, end: Long, status: TaskStatus = TaskStatus.COMPLETED): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM tasks WHERE dueDate BETWEEN :start AND :end")
+    @Query("SELECT COUNT(*) FROM tasks WHERE syncState != 'PENDING_DELETE' AND dueDate BETWEEN :start AND :end")
     fun observeTotalCountForRange(start: Long, end: Long): Flow<Int>
 
     @Query("SELECT * FROM tasks WHERE syncState != :synced")

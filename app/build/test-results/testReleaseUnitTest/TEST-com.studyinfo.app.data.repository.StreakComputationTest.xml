@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.studyinfo.app.data.repository.StreakComputationTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-16T09:32:24" hostname="c-6aaa49a6-14f3c1c7-5506ffe56349" time="0.109">
+  <properties/>
+  <testcase name="consecutive days including today produce a streak" classname="com.studyinfo.app.data.repository.StreakComputationTest" time="0.083"/>
+  <testcase name="streak is zero when no activity" classname="com.studyinfo.app.data.repository.StreakComputationTest" time="0.008"/>
+  <testcase name="streak includes today OR yesterday as the latest day" classname="com.studyinfo.app.data.repository.StreakComputationTest" time="0.008"/>
+  <testcase name="gap in activity breaks the streak but longest streak tracks the best run" classname="com.studyinfo.app.data.repository.StreakComputationTest" time="0.008"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

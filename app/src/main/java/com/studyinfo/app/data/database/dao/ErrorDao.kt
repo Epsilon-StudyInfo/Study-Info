@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ErrorDao {
-    @Query("SELECT * FROM errors ORDER BY addedAt DESC")
+    @Query("SELECT * FROM errors WHERE syncState != 'PENDING_DELETE' ORDER BY addedAt DESC")
     fun observeAll(): Flow<List<ErrorEntryEntity>>
 
     @Query("SELECT * FROM errors WHERE id = :id")
@@ -22,28 +22,28 @@ interface ErrorDao {
     @Query("SELECT * FROM errors WHERE syncState != :synced")
     suspend fun pendingChanges(synced: SyncState = SyncState.SYNCED): List<ErrorEntryEntity>
 
-    @Query("SELECT * FROM errors WHERE status != :archived AND nextReviewAt IS NOT NULL AND nextReviewAt <= :now ORDER BY nextReviewAt ASC")
+    @Query("SELECT * FROM errors WHERE syncState != 'PENDING_DELETE' AND status != :archived AND nextReviewAt IS NOT NULL AND nextReviewAt <= :now ORDER BY nextReviewAt ASC")
     fun observeDueForReview(now: Long, archived: ErrorStatus = ErrorStatus.ARCHIVED): Flow<List<ErrorEntryEntity>>
 
-    @Query("SELECT * FROM errors WHERE subject = :subject ORDER BY addedAt DESC")
+    @Query("SELECT * FROM errors WHERE syncState != 'PENDING_DELETE' AND subject = :subject ORDER BY addedAt DESC")
     fun observeBySubject(subject: Subject): Flow<List<ErrorEntryEntity>>
 
-    @Query("SELECT * FROM errors WHERE favorite = 1 ORDER BY addedAt DESC")
+    @Query("SELECT * FROM errors WHERE syncState != 'PENDING_DELETE' AND favorite = 1 ORDER BY addedAt DESC")
     fun observeFavorites(): Flow<List<ErrorEntryEntity>>
 
-    @Query("SELECT COUNT(*) FROM errors")
+    @Query("SELECT COUNT(*) FROM errors WHERE syncState != 'PENDING_DELETE'")
     fun observeCount(): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM errors WHERE subject = :subject")
+    @Query("SELECT COUNT(*) FROM errors WHERE syncState != 'PENDING_DELETE' AND subject = :subject")
     fun observeCountBySubject(subject: Subject): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM errors WHERE mistakeType = :mistake")
+    @Query("SELECT COUNT(*) FROM errors WHERE syncState != 'PENDING_DELETE' AND mistakeType = :mistake")
     fun observeCountByMistake(mistake: String): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM errors WHERE status = :status")
+    @Query("SELECT COUNT(*) FROM errors WHERE syncState != 'PENDING_DELETE' AND status = :status")
     fun observeCountByStatus(status: ErrorStatus): Flow<Int>
 
-    @Query("SELECT * FROM errors WHERE title LIKE '%' || :q || '%' OR questionText LIKE '%' || :q || '%' OR chapterName LIKE '%' || :q || '%' OR topic LIKE '%' || :q || '%' ORDER BY addedAt DESC LIMIT :limit")
+    @Query("SELECT * FROM errors WHERE syncState != 'PENDING_DELETE' AND title LIKE '%' || :q || '%' OR questionText LIKE '%' || :q || '%' OR chapterName LIKE '%' || :q || '%' OR topic LIKE '%' || :q || '%' ORDER BY addedAt DESC LIMIT :limit")
     suspend fun search(q: String, limit: Int = 50): List<ErrorEntryEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

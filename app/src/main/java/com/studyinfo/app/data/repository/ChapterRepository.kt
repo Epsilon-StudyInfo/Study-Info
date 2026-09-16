@@ -17,8 +17,8 @@ import java.util.Date
 class ChapterRepository(
     private val dao: ChapterDao,
     private val topicDao: TopicDao,
-    private val remoteChapters: FirestoreChaptersDataSource,
-    private val remoteTopics: FirestoreTopicsDataSource,
+    private val remoteChapters: FirestoreChaptersDataSource?,
+    private val remoteTopics: FirestoreTopicsDataSource?,
 ) {
     fun observeAll(): Flow<List<ChapterEntity>> = dao.observeAll()
     fun observeBySubject(subject: Subject): Flow<List<ChapterEntity>> =
@@ -83,9 +83,9 @@ class ChapterRepository(
         for (chapter in pendingChapters) {
             when (chapter.syncState) {
                 SyncState.PENDING_CREATE, SyncState.PENDING_UPDATE ->
-                    if (remoteChapters.put(chapter.id, chapter)) { dao.markSync(chapter.id); count++ }
+                    if (remoteChapters?.put(chapter.id, chapter) == true) { dao.markSync(chapter.id); count++ }
                 SyncState.PENDING_DELETE ->
-                    if (remoteChapters.delete(chapter.id)) { dao.delete(chapter.id); count++ }
+                    if (remoteChapters?.delete(chapter.id) == true) { dao.delete(chapter.id); count++ }
                 else -> {}
             }
         }
@@ -93,9 +93,9 @@ class ChapterRepository(
         for (topic in pendingTopics) {
             when (topic.syncState) {
                 SyncState.PENDING_CREATE, SyncState.PENDING_UPDATE ->
-                    if (remoteTopics.put(topic.id, topic)) { topicDao.markSync(topic.id); count++ }
+                    if (remoteTopics?.put(topic.id, topic) == true) { topicDao.markSync(topic.id); count++ }
                 SyncState.PENDING_DELETE ->
-                    if (remoteTopics.delete(topic.id)) { topicDao.delete(topic.id); count++ }
+                    if (remoteTopics?.delete(topic.id) == true) { topicDao.delete(topic.id); count++ }
                 else -> {}
             }
         }
@@ -103,9 +103,9 @@ class ChapterRepository(
     }
 
     suspend fun pullAll(): Int {
-        val chapters = remoteChapters.fetchAll()
+        val chapters = remoteChapters?.fetchAll() ?: emptyList()
         if (chapters.isNotEmpty()) dao.upsertAll(chapters)
-        val topics = remoteTopics.fetchAll()
+        val topics = remoteTopics?.fetchAll() ?: emptyList()
         if (topics.isNotEmpty()) topicDao.upsertAll(topics)
         return chapters.size + topics.size
     }

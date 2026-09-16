@@ -176,7 +176,12 @@ class ErrorEditViewModel : ViewModel() {
             if (s.id == null) {
                 ServiceLocator.errorRepository.add(entity)
             } else {
-                val existing = ServiceLocator.errorRepository.getById(s.id)!!
+                val existing = ServiceLocator.errorRepository.getById(s.id)
+                if (existing == null) {
+                    // Row was deleted while editing (e.g. from the list or by a sync run).
+                    _ui.value = _ui.value.copy(saving = false, error = "This entry no longer exists.")
+                    return@launch
+                }
                 ServiceLocator.errorRepository.update(entity.copy(
                     addedAt = existing.addedAt,
                     reviewCount = existing.reviewCount,

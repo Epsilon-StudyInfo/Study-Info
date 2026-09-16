@@ -11,7 +11,7 @@ import java.util.Date
 
 class TagRepository(
     private val dao: TagDao,
-    private val remote: FirestoreTagsDataSource,
+    private val remote: FirestoreTagsDataSource?,
 ) {
     fun observeAll(): Flow<List<TagEntity>> = dao.observeAll()
 
@@ -49,11 +49,11 @@ class TagRepository(
         for (tag in pending) {
             when (tag.syncState) {
                 SyncState.PENDING_CREATE, SyncState.PENDING_UPDATE -> {
-                    val ok = remote.put(tag.id, tag)
+                    val ok = remote?.put(tag.id, tag) == true
                     if (ok) { dao.markSync(tag.id); count++ }
                 }
                 SyncState.PENDING_DELETE -> {
-                    val ok = remote.delete(tag.id)
+                    val ok = remote?.delete(tag.id) == true
                     if (ok) { dao.delete(tag.id); count++ }
                 }
                 else -> {}
@@ -63,7 +63,7 @@ class TagRepository(
     }
 
     suspend fun pullAll(): Int {
-        val remoteList = remote.fetchAll()
+        val remoteList = remote?.fetchAll() ?: emptyList()
         if (remoteList.isNotEmpty()) dao.upsertAll(remoteList)
         return remoteList.size
     }

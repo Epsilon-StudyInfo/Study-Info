@@ -68,7 +68,9 @@ class ProgressViewModel : ViewModel() {
 
 data class SubjectProgressUiState(
     val subject: Subject,
+    val selectedExam: ExamType = ExamType.JEE_MAIN,
     val chapters: List<ChapterEntity> = emptyList(),
+    /** Progress for the currently selected exam only, keyed by chapter id. */
     val progressByChapter: Map<String, ProgressEntity> = emptyMap(),
 )
 
@@ -81,14 +83,22 @@ class SubjectProgressViewModel : ViewModel() {
             combine(
                 ServiceLocator.chapterRepository.observeBySubject(subject),
                 ServiceLocator.progressRepository.observeBySubject(subject),
-            ) { chapters, progress ->
+                _ui,
+            ) { chapters, progress, state ->
                 SubjectProgressUiState(
                     subject = subject,
+                    selectedExam = state.selectedExam,
                     chapters = chapters,
-                    progressByChapter = progress.associateBy { it.chapterId },
+                    progressByChapter = progress
+                        .filter { it.examType == state.selectedExam }
+                        .associateBy { it.chapterId },
                 )
             }.collect { _ui.value = it }
         }
+    }
+
+    fun selectExam(exam: ExamType) {
+        _ui.value = _ui.value.copy(selectedExam = exam)
     }
 
     fun setPercent(chapterId: String, subject: Subject, examType: ExamType, percent: Int) {

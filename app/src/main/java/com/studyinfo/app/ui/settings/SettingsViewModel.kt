@@ -1,8 +1,10 @@
 package com.studyinfo.app.ui.settings
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.studyinfo.app.ServiceLocator
+import com.studyinfo.app.sync.SyncWorker
 import com.studyinfo.app.utils.AppResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,10 +17,15 @@ data class SettingsUiState(
     val error: String? = null,
     val accountDeleted: Boolean = false,
     val loggedOut: Boolean = false,
+    /** Cloud sync only applies to Firebase-backed accounts; local-only accounts skip it. */
+    val cloudSyncAvailable: Boolean = false,
 )
 
-class SettingsViewModel : ViewModel() {
-    private val _ui = MutableStateFlow(SettingsUiState())
+class SettingsViewModel(app: Application) : AndroidViewModel(app) {
+
+    private val _ui = MutableStateFlow(
+        SettingsUiState(cloudSyncAvailable = ServiceLocator.authRepository.isFirebaseConfigured),
+    )
     val ui: StateFlow<SettingsUiState> = _ui.asStateFlow()
 
     fun logout() {
@@ -38,11 +45,23 @@ class SettingsViewModel : ViewModel() {
     }
 
     fun syncNow() {
-        // Trigger one-time sync; UI shows a transient message.
-        _ui.value = _ui.value.copy(message = "Sync scheduled")
+        val app = getApplication<Application>()
+        if (ServiceLocator.authRepository.firebaseUid == null) {
+            _ui.value = _ui.value.copy(
+                message = "Cloud sync isn't active for this account (local-only mode). " +
+                    "Your data is safely stored on this device.",
+            )
+            return
+        }
+        runCatching { SyncWorker.enqueueOneTime(app) }
+        _ui.value = _ui.value.copy(message = "Sync started — it runs in the background.")
         viewModelScope.launch {
-            kotlinx.coroutines.delay(2000)
+            kotlinx.coroutines.delay(4000)
             _ui.value = _ui.value.copy(message = null)
         }
+    }
+
+    fun dismissMessage() {
+        _ui.value = _ui.value.copy(message = null, error = null)
     }
 }
