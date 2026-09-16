@@ -28,6 +28,12 @@ class StreakComputationTest {
         return fmt.format(cal.time)
     }
 
+    private fun mkActivity(dateKey: String): StreakActivityEntity =
+        StreakActivityEntity(dateKey, activityCount = 1, lastActivityAt = Date(nowEpoch()), updatedAt = Date(nowEpoch()))
+
+    private fun activeDays(vararg keys: String): List<StreakActivityEntity> =
+        keys.map { mkActivity(it) }.sortedBy { it.dateKey }
+
     @Test fun `streak is zero when no activity`() = runTest {
         val taskDao = mockk<TaskDao>(relaxed = true)
         val streakDao = mockk<StreakDao>(relaxed = true)
@@ -41,9 +47,7 @@ class StreakComputationTest {
     @Test fun `consecutive days including today produce a streak`() = runTest {
         val taskDao = mockk<TaskDao>(relaxed = true)
         val streakDao = mockk<StreakDao>(relaxed = true)
-        coEvery { streakDao.activeDays() } returns listOf(
-            dateKey(-3), dateKey(-2), dateKey(-1), dateKey(0),
-        ).sorted()
+        coEvery { streakDao.activeDays() } returns activeDays(dateKey(-3), dateKey(-2), dateKey(-1), dateKey(0))
         val repo = TaskRepository(taskDao, mockk(relaxed = true), streakDao, mockk(relaxed = true))
         val (current, longest) = repo.computeStreak()
         assertEquals(4, current)
@@ -53,7 +57,7 @@ class StreakComputationTest {
     @Test fun `streak includes today OR yesterday as the latest day`() = runTest {
         val taskDao = mockk<TaskDao>(relaxed = true)
         val streakDao = mockk<StreakDao>(relaxed = true)
-        coEvery { streakDao.activeDays() } returns listOf(dateKey(-3), dateKey(-2), dateKey(-1)).sorted()
+        coEvery { streakDao.activeDays() } returns activeDays(dateKey(-3), dateKey(-2), dateKey(-1))
         val repo = TaskRepository(taskDao, mockk(relaxed = true), streakDao, mockk(relaxed = true))
         val (current, longest) = repo.computeStreak()
         assertEquals(3, current)
@@ -63,10 +67,10 @@ class StreakComputationTest {
     @Test fun `gap in activity breaks the streak but longest streak tracks the best run`() = runTest {
         val taskDao = mockk<TaskDao>(relaxed = true)
         val streakDao = mockk<StreakDao>(relaxed = true)
-        coEvery { streakDao.activeDays() } returns listOf(
+        coEvery { streakDao.activeDays() } returns activeDays(
             dateKey(-10), dateKey(-9), dateKey(-8),
             dateKey(-1), dateKey(0),
-        ).sorted()
+        )
         val repo = TaskRepository(taskDao, mockk(relaxed = true), streakDao, mockk(relaxed = true))
         val (current, longest) = repo.computeStreak()
         assertEquals(2, current)
